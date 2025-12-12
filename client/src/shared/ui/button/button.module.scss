@@ -1,0 +1,28 @@
+.button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  transition: color 150ms, background-color 150ms, border-color 150ms;
+  border: none;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+
+  &.primary {
+    background-color: #3b82f6;
+    color: #ffffff;
+
+    &:hover {
+      background-color: #2563eb;
+    }
+  }
+
+  &.secondary {
+    background-color: #e5e7eb;
+    color: #1f2937;
+
+    &:hover {
+      background-color: #d1d5db;
+    }
+  }
+}
+
