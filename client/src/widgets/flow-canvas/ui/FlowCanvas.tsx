@@ -571,11 +571,9 @@ export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
         <Controls />
         <MiniMap />
       </ReactFlow>
-      {isStreaming && nodes.length > 0 && (
-        <div className={styles.streamingIndicator}>
+      <div className={styles.streamingIndicator}>
           <div className={styles.streamingText}>Adding nodes...</div>
         </div>
-      )}
     </div>
   )
 }

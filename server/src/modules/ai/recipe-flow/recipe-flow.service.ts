@@ -51,7 +51,11 @@ export class RecipeFlowService {
 	 * Это позволяет избежать двойного анализа и ускорить процесс
 	 */
 	async getRecipeFromMessage(message: string): Promise<string> {
-		const systemPrompt = `You are a helpful cooking assistant. When the user asks for a recipe, provide it with clear section headers using one of these formats:
+		const systemPrompt = `You are a helpful cooking assistant. 
+
+CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the user's message. If the user writes in Russian, respond in Russian. If the user writes in English, respond in English. If the user writes in Spanish, respond in Spanish. Always match the user's language exactly - this includes all section headers, ingredient names, and step descriptions.
+
+When the user asks for a recipe, provide it with clear section headers using one of these formats:
 
 1. Markdown headers (preferred):
 ## Ingredients
@@ -103,6 +107,9 @@ Always include clear section headers (Ingredients, Preparation, Cooking, Serving
 		unknown
 	> {
 		const systemPrompt = `You are a helpful assistant that converts cooking recipes into flow diagrams.
+
+CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the user's message and the recipe text. If the user writes in Russian, respond in Russian. If the user writes in English, respond in English. If the user writes in Spanish, respond in Spanish. Always match the user's language exactly - this includes all node labels, descriptions, ingredient names, and time values in the JSON response.
+
 Your task is to analyze a cooking recipe and create a structured flow diagram representing the cooking process.
 
 The flow diagram should represent:
@@ -415,6 +422,9 @@ Rules:
 	 */
 	private async generateFlowFromRecipe(recipeText: string): Promise<RecipeFlowResponseDto> {
 		const systemPrompt = `You are a helpful assistant that converts cooking recipes into flow diagrams.
+
+CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the recipe text. If the recipe is in Russian, respond in Russian. If the recipe is in English, respond in English. If the recipe is in Spanish, respond in Spanish. Always match the recipe's language exactly - this includes all node labels, descriptions, ingredient names, and time values in the JSON response.
+
 Your task is to analyze a cooking recipe and create a structured flow diagram representing the cooking process.
 
 The flow diagram should represent:

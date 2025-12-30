@@ -247,6 +247,11 @@ export function ChatSidebar({ onGenerateFlow }: ChatSidebarProps) {
                   const isRecipe = !msg.isUser && msg.recipe?.isRecipe
                   const shouldShowBlocks = hasRecipeBlocks || isRecipe
                   
+                  // Don't render empty bot messages (they'll show the loading spinner instead)
+                  if (!msg.isUser && !msg.text && !shouldShowBlocks) {
+                    return null
+                  }
+
                   return (
                     <div
                       key={msg.id}
@@ -256,7 +261,7 @@ export function ChatSidebar({ onGenerateFlow }: ChatSidebarProps) {
                         {shouldShowBlocks && msg.recipe && msg.recipe.blocks ? (
                           <RecipeMessage blocks={msg.recipe.blocks} />
                         ) : (
-                          <div className={styles.messageText}>{msg.text}</div>
+                          msg.text && <div className={styles.messageText}>{msg.text}</div>
                         )}
                         <div className={styles.messageTime}>
                           {msg.timestamp.toLocaleTimeString('en-US', {
@@ -264,7 +269,7 @@ export function ChatSidebar({ onGenerateFlow }: ChatSidebarProps) {
                             minute: '2-digit',
                           })}
                         </div>
-                        {!msg.isUser && onGenerateFlow && (
+                        {!msg.isUser && onGenerateFlow && isRecipe && (
                           <div className={styles.messageActions}>
                             <Button
                               size="small"

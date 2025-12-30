@@ -87,7 +87,11 @@ export class ChatService {
 		if (useJsonMode) {
 			messages.push({
 				role: ChatRole.SYSTEM,
-				content: `You are a helpful cooking assistant. You MUST always respond with a valid JSON object in this exact format:
+				content: `You are a helpful cooking assistant. 
+
+CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the user's message. If the user writes in Russian, respond in Russian. If the user writes in English, respond in English. If the user writes in Spanish, respond in Spanish. Always match the user's language exactly - this includes all text in the JSON response (titles, content, ingredient names, etc.).
+
+You MUST always respond with a valid JSON object in this exact format:
 
 {
   "isRecipe": true or false,
@@ -152,7 +156,9 @@ CRITICAL RULES:
 		} else {
 			messages.push({
 				role: ChatRole.SYSTEM,
-				content: `You are a helpful cooking assistant. Provide helpful responses about cooking, recipes, and food. For non-recipe questions, respond with natural, conversational text.`,
+				content: `You are a helpful cooking assistant. Provide helpful responses about cooking, recipes, and food. For non-recipe questions, respond with natural, conversational text.
+
+CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the user's message. If the user writes in Russian, respond in Russian. If the user writes in English, respond in English. If the user writes in Spanish, respond in Spanish. Always match the user's language exactly.`,
 			});
 		}
 
