@@ -11,6 +11,8 @@ import { TimeEdge } from '@/shared/ui/edges/TimeEdge'
 import { recipeFlowApi } from '@/shared/api/recipe-flow/recipe-flow.api'
 import type { FlowNode, FlowEdge, RecipeFlowResponse } from '@/shared/api/recipe-flow/types'
 import { message as antMessage } from 'antd'
+import { useAppDispatch } from '@/shared/lib/redux/hooks'
+import { setNutritionalInfo } from '@/entities/recipe/model/recipe.slice'
 import styles from './flow-canvas.module.scss'
 
 // Constants for layout - rigorous row-based approach
@@ -302,6 +304,7 @@ export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
   const [isStreaming, setIsStreaming] = useState(false)
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const dispatch = useAppDispatch()
 
   const loadFlowData = useCallback(async (recipeText?: string, messageText?: string) => {
     if (!recipeText && !messageText) return
@@ -524,6 +527,13 @@ export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
           
           // Mark streaming as complete
           setIsStreaming(false)
+
+          // Save nutritional info to Redux store
+          if (response.nutritionalInfo) {
+            dispatch(setNutritionalInfo(response.nutritionalInfo))
+          } else {
+            dispatch(setNutritionalInfo(null))
+          }
         },
         // onError
         (error: Error) => {

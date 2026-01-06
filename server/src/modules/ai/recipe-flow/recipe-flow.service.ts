@@ -146,7 +146,16 @@ Return ONLY a valid JSON object with this exact structure:
       "target": "string (node id)",
       "time": "string (time required before proceeding to next step, e.g., '30 minutes', '1 hour', '15 minutes', '2 hours')"
     }
-  ]
+  ],
+  "nutritionalInfo": {
+    "calories": number (total calories per serving),
+    "protein": number (grams of protein per serving),
+    "fat": number (grams of fat per serving),
+    "carbohydrates": number (grams of carbohydrates per serving),
+    "fiber": number (grams of fiber per serving, optional),
+    "sugar": number (grams of sugar per serving, optional),
+    "sodium": number (milligrams of sodium per serving, optional)
+  }
 }
 
 Node Types:
@@ -178,6 +187,9 @@ Rules:
 - If no waiting time is needed between steps, use empty string "" or omit the time field
 - Make sure all node IDs in edges exist in nodes array
 - Escape special characters in strings (quotes, newlines, etc.)
+- Calculate and include nutritional information (nutritionalInfo) based on the ingredients and their quantities in the recipe
+- Nutritional information should be calculated for the entire recipe (total servings). Include calories, protein, fat, carbohydrates as required fields. Optionally include fiber, sugar, and sodium if available
+- Use reasonable estimates based on standard nutritional values for common ingredients
 - Ensure the JSON is complete and valid - do not truncate it
 - Return ONLY the JSON object, no additional text, no markdown formatting, no code blocks`;
 
@@ -461,7 +473,16 @@ Return ONLY a valid JSON object with this exact structure:
       "target": "string (node id)",
       "time": "string (time required before proceeding to next step, e.g., '30 minutes', '1 hour', '15 minutes', '2 hours')"
     }
-  ]
+  ],
+  "nutritionalInfo": {
+    "calories": number (total calories per serving),
+    "protein": number (grams of protein per serving),
+    "fat": number (grams of fat per serving),
+    "carbohydrates": number (grams of carbohydrates per serving),
+    "fiber": number (grams of fiber per serving, optional),
+    "sugar": number (grams of sugar per serving, optional),
+    "sodium": number (milligrams of sodium per serving, optional)
+  }
 }
 
 Node Types:
@@ -493,6 +514,9 @@ Rules:
 - If no waiting time is needed between steps, use empty string "" or omit the time field
 - Make sure all node IDs in edges exist in nodes array
 - Escape special characters in strings (quotes, newlines, etc.)
+- Calculate and include nutritional information (nutritionalInfo) based on the ingredients and their quantities in the recipe
+- Nutritional information should be calculated for the entire recipe (total servings). Include calories, protein, fat, carbohydrates as required fields. Optionally include fiber, sugar, and sodium if available
+- Use reasonable estimates based on standard nutritional values for common ingredients
 - Ensure the JSON is complete and valid - do not truncate it
 - Return ONLY the JSON object, no additional text, no markdown formatting, no code blocks`;
 
