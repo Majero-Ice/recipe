@@ -86,3 +86,21 @@
   }
 }
 
+.editInput {
+  width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.editTextarea {
+  width: 100%;
+  font-size: 12px;
+  resize: none;
+}
+
+.label,
+.description {
+  cursor: text;
+  user-select: text;
+}
+

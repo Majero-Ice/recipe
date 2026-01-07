@@ -21,15 +21,43 @@ interface Message {
 
 interface ChatSidebarProps {
   onGenerateFlow?: (recipe?: string, message?: string) => void
+  initialMessages?: Array<{
+    id: number
+    text: string
+    timestamp: Date
+    isUser: boolean
+    recipe?: StructuredRecipe
+  }>
+  onMessagesChange?: (messages: Message[]) => void
 }
 
 const MIN_WIDTH = 280
 const MAX_WIDTH = 800
 const DEFAULT_WIDTH = 320
 
-export function ChatSidebar({ onGenerateFlow }: ChatSidebarProps) {
+export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange }: ChatSidebarProps) {
   const [isOpen, setIsOpen] = useState(true)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (initialMessages) {
+      return initialMessages.map((msg) => ({
+        ...msg,
+        timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+      }))
+    }
+    return []
+  })
+
+  // Уведомляем родителя об изменении сообщений только при реальных изменениях
+  const previousMessagesRef = useRef<string>(JSON.stringify(messages))
+  
+  useEffect(() => {
+    const messagesString = JSON.stringify(messages)
+    if (onMessagesChange && messagesString !== previousMessagesRef.current) {
+      previousMessagesRef.current = messagesString
+      onMessagesChange(messages)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, onMessagesChange])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH)
@@ -46,6 +74,31 @@ export function ChatSidebar({ onGenerateFlow }: ChatSidebarProps) {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Обновляем сообщения при изменении initialMessages (только если действительно изменились)
+  const previousInitialMessagesRef = useRef<string>(JSON.stringify(initialMessages))
+  
+  useEffect(() => {
+    const initialMessagesString = JSON.stringify(initialMessages)
+    
+    if (initialMessages && initialMessages.length > 0) {
+      if (initialMessagesString !== previousInitialMessagesRef.current) {
+        const mappedMessages = initialMessages.map((msg) => ({
+          ...msg,
+          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+        }))
+        setMessages(mappedMessages)
+        previousInitialMessagesRef.current = initialMessagesString
+        previousMessagesRef.current = JSON.stringify(mappedMessages)
+      }
+    } else if (!initialMessages && previousInitialMessagesRef.current !== 'null' && previousInitialMessagesRef.current !== '') {
+      // Если initialMessages стал undefined, очищаем сообщения только если они были загружены ранее
+      setMessages([])
+      previousInitialMessagesRef.current = 'null'
+      previousMessagesRef.current = '[]'
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessages])
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     // Only handle left mouse button
@@ -263,12 +316,6 @@ export function ChatSidebar({ onGenerateFlow }: ChatSidebarProps) {
                         ) : (
                           msg.text && <div className={styles.messageText}>{msg.text}</div>
                         )}
-                        <div className={styles.messageTime}>
-                          {msg.timestamp.toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </div>
                         {!msg.isUser && onGenerateFlow && isRecipe && (
                           <div className={styles.messageActions}>
                             <Button

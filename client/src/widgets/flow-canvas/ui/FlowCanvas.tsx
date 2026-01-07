@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { ReactFlow, Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState } from '@xyflow/react'
-import type { Node, Edge, Connection, ReactFlowInstance } from '@xyflow/react'
+import type { Node, Edge, Connection, ReactFlowInstance, OnNodesDelete, OnEdgesDelete } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { DefaultNode } from '@/shared/ui/nodes/defaultNode/DefaultNode'
 import { IngredientNode } from '@/shared/ui/nodes/ingredientNode/IngredientNode'
@@ -8,11 +8,14 @@ import { PreparationNode } from '@/shared/ui/nodes/preparationNode/PreparationNo
 import { CookingNode } from '@/shared/ui/nodes/cookingNode/CookingNode'
 import { ServingNode } from '@/shared/ui/nodes/servingNode/ServingNode'
 import { TimeEdge } from '@/shared/ui/edges/TimeEdge'
+import { ContextMenu } from './ContextMenu'
 import { recipeFlowApi } from '@/shared/api/recipe-flow/recipe-flow.api'
 import type { FlowNode, FlowEdge, RecipeFlowResponse } from '@/shared/api/recipe-flow/types'
-import { message as antMessage } from 'antd'
-import { useAppDispatch } from '@/shared/lib/redux/hooks'
+import { message as antMessage, Input, Modal } from 'antd'
+import { SaveOutlined } from '@ant-design/icons'
+import { useAppDispatch, useAppSelector } from '@/shared/lib/redux/hooks'
 import { setNutritionalInfo } from '@/entities/recipe/model/recipe.slice'
+import { Button } from '@/shared/ui/button/Button'
 import styles from './flow-canvas.module.scss'
 
 // Constants for layout - rigorous row-based approach
@@ -296,15 +299,104 @@ const initialEdges: Edge[] = []
 interface FlowCanvasProps {
   recipe?: string
   message?: string
+  onSave?: (nodes: Node[], edges: Edge[], recipe?: string, message?: string) => void
+  initialNodes?: Node[]
+  initialEdges?: Edge[]
+  onNodesChange?: (nodes: Node[]) => void
+  onEdgesChange?: (edges: Edge[]) => void
+  isSavedRecipe?: boolean
 }
 
-export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+export function FlowCanvas({ 
+  recipe, 
+  message, 
+  onSave, 
+  initialNodes, 
+  initialEdges, 
+  onNodesChange: externalOnNodesChange,
+  onEdgesChange: externalOnEdgesChange,
+  isSavedRecipe = false 
+}: FlowCanvasProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes || [])
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges || [])
+  
+  // Отслеживаем изменения nodes и edges для уведомления внешних компонентов
+  const previousNodesRef = useRef<Node[]>([])
+  const previousEdgesRef = useRef<Edge[]>([])
+  const previousNodesLengthRef = useRef<number>(0)
+  const previousEdgesLengthRef = useRef<number>(0)
+  const nodesChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const edgesChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => {
+    // Используем debounce для избежания лишних обновлений
+    if (nodesChangeTimeoutRef.current) {
+      clearTimeout(nodesChangeTimeoutRef.current)
+    }
+    
+    nodesChangeTimeoutRef.current = setTimeout(() => {
+      const nodesChanged = nodes.length !== previousNodesLengthRef.current || 
+        JSON.stringify(nodes.map(n => ({ id: n.id, data: n.data, position: n.position }))) !== 
+        JSON.stringify(previousNodesRef.current?.map(n => ({ id: n.id, data: n.data, position: n.position })))
+      
+      if (nodesChanged && externalOnNodesChange) {
+        externalOnNodesChange(nodes)
+        previousNodesLengthRef.current = nodes.length
+        previousNodesRef.current = nodes
+      }
+    }, 100)
+
+    return () => {
+      if (nodesChangeTimeoutRef.current) {
+        clearTimeout(nodesChangeTimeoutRef.current)
+      }
+    }
+  }, [nodes, externalOnNodesChange])
+
+  useEffect(() => {
+    // Используем debounce для избежания лишних обновлений
+    if (edgesChangeTimeoutRef.current) {
+      clearTimeout(edgesChangeTimeoutRef.current)
+    }
+    
+    edgesChangeTimeoutRef.current = setTimeout(() => {
+      const edgesChanged = edges.length !== previousEdgesLengthRef.current ||
+        JSON.stringify(edges.map(e => ({ id: e.id, source: e.source, target: e.target }))) !==
+        JSON.stringify(previousEdgesRef.current?.map(e => ({ id: e.id, source: e.source, target: e.target })))
+      
+      if (edgesChanged && externalOnEdgesChange) {
+        externalOnEdgesChange(edges)
+        previousEdgesLengthRef.current = edges.length
+        previousEdgesRef.current = edges
+      }
+    }, 100)
+
+    return () => {
+      if (edgesChangeTimeoutRef.current) {
+        clearTimeout(edgesChangeTimeoutRef.current)
+      }
+    }
+  }, [edges, externalOnEdgesChange])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | null>(null)
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dispatch = useAppDispatch()
+  const nutritionalInfo = useAppSelector((state) => state.recipe.nutritionalInfo)
+  const previousInitialNodesRef = useRef<Node[] | undefined>(undefined)
+  const previousInitialEdgesRef = useRef<Edge[] | undefined>(undefined)
+  
+  // Используем более эффективное сравнение - по длине и первому элементу вместо полного JSON.stringify
+  const initialNodesKey = useMemo(() => {
+    if (!initialNodes || initialNodes.length === 0) return ''
+    return `${initialNodes.length}-${initialNodes[0]?.id || ''}`
+  }, [initialNodes])
+  
+  const initialEdgesKey = useMemo(() => {
+    if (!initialEdges || initialEdges.length === 0) return ''
+    return `${initialEdges.length}-${initialEdges[0]?.id || ''}`
+  }, [initialEdges])
 
   const loadFlowData = useCallback(async (recipeText?: string, messageText?: string) => {
     if (!recipeText && !messageText) return
@@ -549,11 +641,109 @@ export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
     }
   }, [setNodes, setEdges])
 
+  // Загружаем сохранённые узлы и рёбра только при изменении initialNodes/initialEdges
   useEffect(() => {
-    if (recipe || message) {
+    // Если initialNodes не определен, пропускаем (ожидание генерации или загрузки)
+    if (initialNodes === undefined) {
+      // Если initialNodes стал undefined, сбрасываем предыдущие значения
+      previousInitialNodesRef.current = undefined
+      previousInitialEdgesRef.current = undefined
+      return
+    }
+
+    // Если initialNodes это пустой массив, очищаем nodes и edges
+    if (initialNodes.length === 0) {
+      setNodes([])
+      setEdges([])
+      previousInitialNodesRef.current = initialNodes
+      previousInitialEdgesRef.current = initialEdges || []
+      return
+    }
+
+    // Проверяем, изменились ли данные, сравнивая ссылки и ключи
+    const nodesChanged = previousInitialNodesRef.current !== initialNodes || 
+                        initialNodesKey !== `${initialNodes.length}-${initialNodes[0]?.id || ''}`
+    const edgesChanged = previousInitialEdgesRef.current !== initialEdges ||
+                        initialEdgesKey !== `${initialEdges?.length || 0}-${initialEdges?.[0]?.id || ''}`
+    
+    if (nodesChanged || edgesChanged) {
+      // Загружаем сохранённые узлы и рёбра только если они действительно изменились
+      setNodes(initialNodes)
+      setEdges(initialEdges || [])
+      previousInitialNodesRef.current = initialNodes
+      previousInitialEdgesRef.current = initialEdges || []
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNodes, initialEdges, initialNodesKey, initialEdgesKey])
+
+  // Загружаем flow данные только если нет initialNodes (чтобы не перезаписывать загруженный рецепт)
+  const previousRecipeRef = useRef<string | undefined>(undefined)
+  const previousMessageRef = useRef<string | undefined>(undefined)
+  
+  // Инициализируем refs при загрузке initialNodes/initialEdges
+  useEffect(() => {
+    if (initialNodes && initialNodes.length > 0) {
+      previousNodesRef.current = initialNodes
+      previousNodesLengthRef.current = initialNodes.length
+    }
+    if (initialEdges && initialEdges.length > 0) {
+      previousEdgesRef.current = initialEdges
+      previousEdgesLengthRef.current = initialEdges.length
+    }
+  }, [initialNodes, initialEdges])
+  
+  useEffect(() => {
+    // Проверяем, изменились ли recipe или message
+    const recipeChanged = recipe !== previousRecipeRef.current
+    const messageChanged = message !== previousMessageRef.current
+    
+    if ((recipe || message) && !initialNodes && (recipeChanged || messageChanged)) {
+      // Сбрасываем предыдущие значения при загрузке нового рецепта
+      previousInitialNodesRef.current = ''
+      previousInitialEdgesRef.current = ''
+      previousRecipeRef.current = recipe
+      previousMessageRef.current = message
       loadFlowData(recipe, message)
     }
-  }, [recipe, message, loadFlowData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe, message, initialNodes])
+
+  const handleSave = () => {
+    if (!nodes || nodes.length === 0) {
+      antMessage.warning('Нет данных для сохранения')
+      return
+    }
+
+    Modal.confirm({
+      title: 'Сохранить рецепт',
+      content: (
+        <div style={{ marginTop: 16 }}>
+          <Input
+            placeholder="Название рецепта"
+            id="recipe-name-input"
+            onPressEnter={(e) => {
+              const input = e.currentTarget
+              const name = input.value.trim() || `Рецепт ${new Date().toLocaleDateString('ru-RU')}`
+              if (onSave) {
+                onSave(nodes, edges, recipe, message)
+              }
+              Modal.destroyAll()
+            }}
+            autoFocus
+          />
+        </div>
+      ),
+      okText: 'Сохранить',
+      cancelText: 'Отмена',
+      onOk: () => {
+        const input = document.getElementById('recipe-name-input') as HTMLInputElement
+        const name = input?.value.trim() || `Рецепт ${new Date().toLocaleDateString('ru-RU')}`
+        if (onSave) {
+          onSave(nodes, edges, recipe, message)
+        }
+      },
+    })
+  }
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -562,6 +752,147 @@ export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
 
   const onInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowInstanceRef.current = instance
+  }, [])
+
+  // Context menu handlers
+  const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault()
+    
+    if (!reactFlowInstanceRef.current) return
+
+    const bounds = containerRef.current?.getBoundingClientRect()
+    if (!bounds) return
+
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+    })
+
+    // Store the click position in flow coordinates for node creation
+    const position = reactFlowInstanceRef.current.screenToFlowPosition({
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    })
+    setClickPosition(position)
+  }, [])
+
+  const onCloseContextMenu = useCallback(() => {
+    setContextMenu(null)
+    setClickPosition(null)
+  }, [])
+
+  const onAddNode = useCallback((nodeType: string) => {
+    if (!clickPosition) return
+
+    const newNode: Node = {
+      id: `node-${Date.now()}`,
+      type: nodeType,
+      position: clickPosition,
+      data: {
+        label: nodeType === 'ingredientNode' ? 'Ингредиенты' :
+               nodeType === 'preparationNode' ? 'Подготовка' :
+               nodeType === 'cookingNode' ? 'Приготовление' :
+               nodeType === 'servingNode' ? 'Подача' : 'Новый узел',
+        description: '',
+        ingredients: nodeType === 'ingredientNode' ? [] : undefined,
+        onLabelChange: (newLabel: string) => {
+          setNodes((nds) =>
+            nds.map((node) =>
+              node.id === newNode.id
+                ? { ...node, data: { ...node.data, label: newLabel } }
+                : node
+            )
+          )
+        },
+        onDescriptionChange: (newDescription: string) => {
+          setNodes((nds) =>
+            nds.map((node) =>
+              node.id === newNode.id
+                ? { ...node, data: { ...node.data, description: newDescription } }
+                : node
+            )
+          )
+        },
+      },
+    }
+
+    setNodes((nds) => [...nds, newNode])
+    antMessage.success('Узел добавлен')
+  }, [clickPosition, setNodes])
+
+  // Update node data handlers for existing nodes
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          onLabelChange: (newLabel: string) => {
+            setNodes((prevNodes) =>
+              prevNodes.map((n) =>
+                n.id === node.id
+                  ? { ...n, data: { ...n.data, label: newLabel } }
+                  : n
+              )
+            )
+          },
+          onDescriptionChange: (newDescription: string) => {
+            setNodes((prevNodes) =>
+              prevNodes.map((n) =>
+                n.id === node.id
+                  ? { ...n, data: { ...n.data, description: newDescription } }
+                  : n
+              )
+            )
+          },
+        },
+      }))
+    )
+  }, [setNodes])
+
+  // Handle node/edge deletion with keyboard
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if we're not in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        // ReactFlow will handle this automatically with the right props
+        // We just need to make sure nodes/edges are deletable
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => {
+      if (contextMenu) {
+        onCloseContextMenu()
+      }
+    }
+
+    document.addEventListener('click', handleClick)
+    return () => {
+      document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu, onCloseContextMenu])
+
+  // Callback when nodes are deleted
+  const onNodesDelete: OnNodesDelete = useCallback((deleted) => {
+    antMessage.info(`Удалено узлов: ${deleted.length}`)
+  }, [])
+
+  // Callback when edges are deleted
+  const onEdgesDelete: OnEdgesDelete = useCallback((deleted) => {
+    antMessage.info(`Удалено связей: ${deleted.length}`)
   }, [])
 
   return (
@@ -575,15 +906,52 @@ export function FlowCanvas({ recipe, message }: FlowCanvasProps) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onInit={onInit}
+        onPaneContextMenu={onPaneContextMenu}
+        onNodesDelete={onNodesDelete}
+        onEdgesDelete={onEdgesDelete}
+        deleteKeyCode={['Delete', 'Backspace']}
+        multiSelectionKeyCode="Shift"
         fitView
+        nodesDraggable={true}
+        nodesConnectable={true}
+        elementsSelectable={true}
       >
         <Background />
         <Controls />
         <MiniMap />
       </ReactFlow>
-      <div className={styles.streamingIndicator}>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={onCloseContextMenu}
+          onAddNode={onAddNode}
+        />
+      )}
+      {nodes && nodes.length > 0 && onSave && !isSavedRecipe && (
+        <div className={styles.saveButton}>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSave}
+            disabled={isStreaming}
+          >
+            Сохранить рецепт
+          </Button>
+        </div>
+      )}
+      {isSavedRecipe && nodes && nodes.length > 0 && (
+        <div className={styles.saveButton}>
+          <div className={styles.autoSaveIndicator}>
+            Изменения сохраняются автоматически
+          </div>
+        </div>
+      )}
+      {isStreaming && (
+        <div className={styles.streamingIndicator}>
           <div className={styles.streamingText}>Adding nodes...</div>
         </div>
+      )}
     </div>
   )
 }

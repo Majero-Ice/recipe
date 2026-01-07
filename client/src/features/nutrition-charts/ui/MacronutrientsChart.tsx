@@ -79,3 +79,4 @@ export function MacronutrientsChart({ nutritionalInfo }: MacronutrientsChartProp
   )
 }
 
+
