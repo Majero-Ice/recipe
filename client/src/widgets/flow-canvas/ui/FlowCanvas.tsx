@@ -7,6 +7,7 @@ import { IngredientNode } from '@/shared/ui/nodes/ingredientNode/IngredientNode'
 import { PreparationNode } from '@/shared/ui/nodes/preparationNode/PreparationNode'
 import { CookingNode } from '@/shared/ui/nodes/cookingNode/CookingNode'
 import { ServingNode } from '@/shared/ui/nodes/servingNode/ServingNode'
+import { BlockNode } from '@/shared/ui/nodes/blockNode/BlockNode'
 import { TimeEdge } from '@/shared/ui/edges/TimeEdge'
 import { ContextMenu } from './ContextMenu'
 import { recipeFlowApi } from '@/shared/api/recipe-flow/recipe-flow.api'
@@ -69,10 +70,8 @@ function getAlternativeHandles(preferredSourceHandle: string, preferredTargetHan
 }
 
 /**
- * Determines the optimal connection handles for an edge based on node positions
- * Uses rigorous structure: edges between rows use bottom->top handles
- * Edges within rows use left/right handles based on row direction
- * Ensures that each handle is only used by one edge
+ * Determines the optimal connection handles for an edge
+ * All nodes now use single center handles: "source" and "target"
  */
 function getOptimalHandles(
   sourceNode: Node,
@@ -80,57 +79,13 @@ function getOptimalHandles(
   usedSourceHandles: Set<string>,
   usedTargetHandles: Set<string>,
 ): { sourceHandle: string; targetHandle: string } {
-  const dx = targetNode.position.x - sourceNode.position.x
-  const dy = targetNode.position.y - sourceNode.position.y
-  const absDy = Math.abs(dy)
-
-  // Determine if nodes are in the same row (similar Y coordinates)
-  const SAME_ROW_THRESHOLD = 50 // pixels
-  const isSameRow = absDy < SAME_ROW_THRESHOLD
+  // All nodes now use single center handles
+  const sourceHandle = 'source'
+  const targetHandle = 'target'
   
-  let preferredSourceHandle: string
-  let preferredTargetHandle: string
-
-  if (isSameRow) {
-    // Nodes are in the same row - use horizontal handles
-    if (dx > 0) {
-      // Target is to the right of source
-      preferredSourceHandle = 'source-right'
-      preferredTargetHandle = 'target-left'
-    } else {
-      // Target is to the left of source
-      preferredSourceHandle = 'source-left'
-      preferredTargetHandle = 'target-right'
-    }
-  } else {
-    // Nodes are in different rows - ALWAYS use vertical handles (bottom to top)
-    // This ensures edges go vertically downward between rows
-    if (dy > 0) {
-      // Target is below source (shouldn't happen in our layout, but handle it)
-      preferredSourceHandle = 'source-bottom'
-      preferredTargetHandle = 'target-top'
-    } else {
-      // Target is above source (normal case: source in row N, target in row N+1)
-      preferredSourceHandle = 'source-bottom'
-      preferredTargetHandle = 'target-top'
-    }
-  }
-
-  // Get alternative handle combinations
-  const alternatives = getAlternativeHandles(preferredSourceHandle, preferredTargetHandle)
-  
-  // Find the first available combination
-  for (const alt of alternatives) {
-    const sourceHandleKey = `${sourceNode.id}:${alt.sourceHandle}`
-    const targetHandleKey = `${targetNode.id}:${alt.targetHandle}`
-    
-    if (!usedSourceHandles.has(sourceHandleKey) && !usedTargetHandles.has(targetHandleKey)) {
-      return alt
-    }
-  }
-  
-  // If all handles are taken, return the preferred one anyway
-  return { sourceHandle: preferredSourceHandle, targetHandle: preferredTargetHandle }
+  // Since we have only one handle per node, we can reuse it for multiple connections
+  // ReactFlow will handle multiple connections to the same handle
+  return { sourceHandle, targetHandle }
 }
 
 /**
@@ -170,23 +125,25 @@ function calculateNodesPerRow(containerWidth?: number): number {
 }
 
 /**
- * Rigorous row-based layout with alternating directions
- * Nodes are arranged in rows that fit the screen width
- * Rows alternate direction: left-to-right, then right-to-left
- * Edges connect vertically between rows (bottom to top handles)
+ * Block-based layout algorithm
+ * Organizes nodes into parallel blocks:
+ * - Blocks are positioned vertically (one below another)
+ * - Nodes within each block flow horizontally (left to right)
+ * - After blocks merge, nodes flow vertically (top to bottom) in center
  */
 function autoLayoutNodes(nodes: Node[], edges: Edge[], containerWidth?: number): Node[] {
   if (nodes.length === 0) return nodes
 
-  // Build graph structure to determine levels
-  const nodeLevels = new Map<string, number>()
+  // Build graph structure
   const children = new Map<string, string[]>()
   const parents = new Map<string, Set<string>>()
+  const nodeMap = new Map<string, Node>()
   
   // Initialize maps
   nodes.forEach((node) => {
     children.set(node.id, [])
     parents.set(node.id, new Set())
+    nodeMap.set(node.id, node)
   })
 
   // Build graph
@@ -195,86 +152,262 @@ function autoLayoutNodes(nodes: Node[], edges: Edge[], containerWidth?: number):
     parents.get(edge.target)?.add(edge.source)
   })
 
-  // Find root nodes
-  const roots = nodes.filter((n) => {
-    const p = parents.get(n.id)
-    return !p || p.size === 0 || n.type === 'ingredientNode'
-  })
-
-  // BFS to assign levels
-  const queue: Array<{ id: string; level: number }> = []
-  roots.forEach((n) => {
-    nodeLevels.set(n.id, 0)
-    queue.push({ id: n.id, level: 0 })
-  })
-
-  if (queue.length === 0 && nodes.length > 0) {
-    nodeLevels.set(nodes[0].id, 0)
-    queue.push({ id: nodes[0].id, level: 0 })
+  // Find ingredient node (root)
+  const ingredientNode = nodes.find(n => n.type === 'ingredientNode')
+  if (!ingredientNode) {
+    // Fallback to simple layout if no ingredient node
+    return simpleLayout(nodes, containerWidth)
   }
 
-  const visited = new Set<string>()
-  while (queue.length > 0) {
-    const { id, level } = queue.shift()!
-    if (visited.has(id)) continue
-    visited.add(id)
+  // Find all block nodes directly connected from ingredient node
+  const blockNodes = children.get(ingredientNode.id)?.map(id => nodeMap.get(id)!).filter(n => n?.type === 'blockNode') || []
+  
+  // If no block nodes, use simple layout
+  if (blockNodes.length === 0) {
+    return simpleLayout(nodes, containerWidth)
+  }
 
-    const childList = children.get(id) || []
-    childList.forEach((childId) => {
-      const currentLevel = nodeLevels.get(childId)
-      const newLevel = level + 1
-      if (currentLevel === undefined || newLevel > currentLevel) {
-        nodeLevels.set(childId, newLevel)
-        queue.push({ id: childId, level: newLevel })
+  const positionedNodes: Node[] = []
+  const positioned = new Set<string>()
+
+  // Process each block - build chains from block nodes
+  // A block chain includes all nodes from blockNode until merge point (node with multiple parents)
+  const blockChains: Array<{ blockNode: Node; chain: Node[]; mergeNodeId?: string }> = []
+  const allVisitedInBlocks = new Set<string>()
+  
+  blockNodes.forEach((blockNode) => {
+    // Build chain for this block - include ALL nodes that belong to this block
+    const chain: Node[] = [blockNode]
+    const blockVisited = new Set<string>([blockNode.id])
+    allVisitedInBlocks.add(blockNode.id)
+    
+    // Follow the chain from block node until we hit a merge point or end
+    let currentNode = blockNode
+    let mergeNodeId: string | undefined = undefined
+    
+    while (true) {
+      const nextNodes = children.get(currentNode.id)?.filter(id => !blockVisited.has(id)) || []
+      if (nextNodes.length === 0) break
+      
+      // Take first child (sequential flow within block)
+      const nextId = nextNodes[0]
+      const nextNode = nodeMap.get(nextId)!
+      
+      // Check if this node is a merge point (has multiple parents from different blocks)
+      const nodeParents = parents.get(nextId) || new Set()
+      if (nodeParents.size > 1) {
+        // This is a merge node - don't include it in the block chain
+        mergeNodeId = nextId
+        allVisitedInBlocks.add(nextId)
+        break
+      }
+      
+      // Check if any other child is a merge point (shouldn't happen in sequential flow, but check anyway)
+      const hasMergeChild = nextNodes.some(id => {
+        const childParents = parents.get(id) || new Set()
+        return childParents.size > 1
+      })
+      
+      if (hasMergeChild && nextNodes.length > 1) {
+        // Find the merge node
+        const mergeChild = nextNodes.find(id => {
+          const childParents = parents.get(id) || new Set()
+          return childParents.size > 1
+        })
+        if (mergeChild) {
+          mergeNodeId = mergeChild
+          allVisitedInBlocks.add(mergeChild)
+          break
+        }
+      }
+      
+      // Add node to chain (it's part of this block)
+      chain.push(nextNode)
+      blockVisited.add(nextId)
+      allVisitedInBlocks.add(nextId)
+      currentNode = nextNode
+    }
+    
+    blockChains.push({ blockNode, chain, mergeNodeId })
+  })
+
+  // Calculate positions
+  const centerX = containerWidth ? containerWidth / 2 - NODE_WIDTH / 2 : 400
+  const leftX = START_X // Left side for ingredient node
+  
+  // Position blocks: each block on its own row, nodes within block go horizontally (left to right)
+  // Blocks start from center and go horizontally
+  const blockStartX = centerX - 200 // Start blocks slightly left of center
+  let maxBlockX = blockStartX // Track the rightmost position of any block
+  
+  blockChains.forEach(({ chain, mergeNodeId }, blockIndex) => {
+    const blockY = START_Y + blockIndex * NODE_SPACING_Y
+    
+    // Position ALL nodes in chain horizontally (left to right) on the same row
+    chain.forEach((node, nodeIndex) => {
+      if (positioned.has(node.id)) return
+      
+      const nodeX = blockStartX + nodeIndex * NODE_SPACING_X
+      maxBlockX = Math.max(maxBlockX, nodeX + NODE_WIDTH) // Track rightmost edge
+      
+      positionedNodes.push({
+        ...node,
+        position: {
+          x: Math.round(nodeX),
+          y: Math.round(blockY),
+        },
+      })
+      positioned.add(node.id)
+    })
+  })
+  
+  // Calculate rightX: position merge node on the right side, similar to ingredient on left
+  // Always position on the right edge of the canvas, regardless of block positions
+  let rightX: number
+  if (containerWidth) {
+    // Use container width minus padding (same approach as leftX)
+    rightX = containerWidth - NODE_WIDTH - START_X
+  } else {
+    // Calculate based on viewport width, accounting for sidebar
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920
+    const estimatedSidebarWidth = 320
+    const availableWidth = viewportWidth - estimatedSidebarWidth
+    rightX = availableWidth - NODE_WIDTH - START_X
+  }
+  
+  // Ensure merge node is at least to the right of all blocks
+  const minRightX = maxBlockX + NODE_SPACING_X
+  rightX = Math.max(rightX, minRightX)
+
+  // Calculate middle Y position of all blocks for ingredient and merge nodes
+  const firstBlockY = START_Y
+  const lastBlockY = START_Y + (blockChains.length - 1) * NODE_SPACING_Y
+  const middleY = (firstBlockY + lastBlockY) / 2
+
+  // Position ingredient node on the left, at middle Y of blocks
+  positionedNodes.push({
+    ...ingredientNode,
+    position: { x: Math.round(leftX), y: Math.round(middleY) },
+  })
+  positioned.add(ingredientNode.id)
+
+  // Collect all merge nodes
+  const allMergeNodes = new Set<string>()
+  blockChains.forEach(({ mergeNodeId }) => {
+    if (mergeNodeId) allMergeNodes.add(mergeNodeId)
+  })
+
+  // Position merge nodes on the right, at middle Y of blocks
+  allMergeNodes.forEach(mergeNodeId => {
+    if (positioned.has(mergeNodeId)) return
+    
+    const mergeNode = nodeMap.get(mergeNodeId)!
+    positionedNodes.push({
+      ...mergeNode,
+      position: {
+        x: Math.round(rightX),
+        y: Math.round(middleY),
+      },
+    })
+    positioned.add(mergeNodeId)
+  })
+
+  // Find and position nodes after merge (snake pattern: right-to-left, then new row below)
+  const nodesAfterMerge: Node[] = []
+  const visitedAfterMerge = new Set<string>()
+  
+  const findNodesAfter = (nodeId: string, depth: number = 0) => {
+    if (depth > 20) return // Prevent infinite loops
+    
+    const childrenIds = children.get(nodeId) || []
+    childrenIds.forEach(childId => {
+      if (visitedAfterMerge.has(childId)) return
+      visitedAfterMerge.add(childId)
+      
+      const child = nodeMap.get(childId)!
+      if (!positioned.has(childId)) {
+        nodesAfterMerge.push(child)
+        findNodesAfter(childId, depth + 1)
       }
     })
   }
 
-  // Sort nodes by level first (to maintain some hierarchy), then arrange sequentially in rows
-  const sortedNodes = nodes.sort((a, b) => {
-    const levelA = nodeLevels.get(a.id) ?? 0
-    const levelB = nodeLevels.get(b.id) ?? 0
-    if (levelA !== levelB) return levelA - levelB
-    // If same level, maintain original order
-    return 0
+  // Start from all merge nodes
+  allMergeNodes.forEach(mergeNodeId => {
+    findNodesAfter(mergeNodeId)
   })
 
-  // Calculate nodes per row based on available canvas width
+  // Position nodes after merge in snake pattern (all rows go right-to-left)
   const nodesPerRow = calculateNodesPerRow(containerWidth)
+  const mergeStartY = lastBlockY + NODE_SPACING_Y // Start below merge node
+  
+  nodesAfterMerge.forEach((node, index) => {
+    if (positioned.has(node.id)) return
+    
+    const rowIndex = Math.floor(index / nodesPerRow)
+    const colIndex = index % nodesPerRow
+    
+    // All rows go right-to-left: start from right, go left
+    const rowStartX = rightX
+    const nodeX = rowStartX - colIndex * NODE_SPACING_X
+    const nodeY = mergeStartY + rowIndex * NODE_SPACING_Y
+    
+    positionedNodes.push({
+      ...node,
+      position: {
+        x: Math.round(nodeX),
+        y: Math.round(nodeY),
+      },
+    })
+    positioned.add(node.id)
+  })
 
-  // Position nodes sequentially in rows with alternating directions
-  // Fill rows completely before moving to the next row, regardless of level
+  // Position any remaining unpositioned nodes
+  nodes.forEach(node => {
+    if (!positioned.has(node.id)) {
+      positionedNodes.push({
+        ...node,
+        position: {
+          x: Math.round(centerX),
+          y: Math.round(START_Y + positionedNodes.length * NODE_SPACING_Y),
+        },
+      })
+    }
+  })
+
+  return positionedNodes
+}
+
+/**
+ * Simple fallback layout for non-block structures
+ */
+function simpleLayout(nodes: Node[], containerWidth?: number): Node[] {
+  const nodesPerRow = calculateNodesPerRow(containerWidth)
   const positionedNodes: Node[] = []
-  let globalRowIndex = 0 // Track global row index
+  const centerX = containerWidth ? containerWidth / 2 - NODE_WIDTH / 2 : 400
 
-  // Process all nodes sequentially, filling rows
-  for (let i = 0; i < sortedNodes.length; i += nodesPerRow) {
-    const rowNodes = sortedNodes.slice(i, i + nodesPerRow)
-    const isEvenRow = globalRowIndex % 2 === 0 // Even rows go left-to-right, odd rows go right-to-left
+  for (let i = 0; i < nodes.length; i += nodesPerRow) {
+    const rowNodes = nodes.slice(i, i + nodesPerRow)
+    const rowIndex = Math.floor(i / nodesPerRow)
+    const isEvenRow = rowIndex % 2 === 0
 
     rowNodes.forEach((node, colIndex) => {
       let x: number
       if (isEvenRow) {
-        // Left-to-right: first node at START_X, subsequent nodes spaced to the right
-        x = START_X + colIndex * NODE_SPACING_X
+        x = centerX - ((rowNodes.length - 1) * NODE_SPACING_X) / 2 + colIndex * NODE_SPACING_X
       } else {
-        // Right-to-left: first node at rightmost position, subsequent nodes spaced to the left
         const rowWidth = (rowNodes.length - 1) * NODE_SPACING_X
-        x = START_X + rowWidth - (colIndex * NODE_SPACING_X)
+        x = centerX + rowWidth / 2 - (colIndex * NODE_SPACING_X)
       }
-
-      const y = START_Y + globalRowIndex * NODE_SPACING_Y
 
       positionedNodes.push({
         ...node,
         position: {
           x: Math.round(x),
-          y: Math.round(y),
+          y: Math.round(START_Y + rowIndex * NODE_SPACING_Y),
         },
       })
     })
-    
-    globalRowIndex++ // Move to next row
   }
 
   return positionedNodes
@@ -286,6 +419,7 @@ const nodeTypes = {
   preparationNode: PreparationNode,
   cookingNode: CookingNode,
   servingNode: ServingNode,
+  blockNode: BlockNode,
 }
 
 const edgeTypes = {
@@ -672,6 +806,8 @@ export function FlowCanvas({
       setEdges(initialEdges || [])
       previousInitialNodesRef.current = initialNodes
       previousInitialEdgesRef.current = initialEdges || []
+      // Reset processed nodes ref so callbacks get re-initialized for loaded nodes
+      processedNodesRef.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNodes, initialEdges, initialNodesKey, initialEdgesKey])
@@ -781,74 +917,122 @@ export function FlowCanvas({
     setClickPosition(null)
   }, [])
 
+  // Helper function to create callbacks for a node
+  // Must be defined before onAddNode since it's used there
+  const createNodeCallbacks = useCallback((nodeId: string, nodeType?: string) => {
+    return {
+      onLabelChange: (newLabel: string) => {
+        setNodes((prevNodes) =>
+          prevNodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, label: newLabel } }
+              : n
+          )
+        )
+      },
+      onDescriptionChange: (newDescription: string) => {
+        setNodes((prevNodes) =>
+          prevNodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, description: newDescription } }
+              : n
+          )
+        )
+      },
+      ...(nodeType === 'ingredientNode' && {
+        onIngredientsChange: (ingredients: any[]) => {
+          setNodes((prevNodes) =>
+            prevNodes.map((n) =>
+              n.id === nodeId
+                ? { ...n, data: { ...n.data, ingredients } }
+                : n
+            )
+          )
+        },
+      }),
+    }
+  }, [setNodes])
+
   const onAddNode = useCallback((nodeType: string) => {
     if (!clickPosition) return
 
+    const nodeId = `node-${Date.now()}`
     const newNode: Node = {
-      id: `node-${Date.now()}`,
+      id: nodeId,
       type: nodeType,
       position: clickPosition,
       data: {
         label: nodeType === 'ingredientNode' ? 'Ingredients' :
                nodeType === 'preparationNode' ? 'Preparation' :
                nodeType === 'cookingNode' ? 'Cooking' :
-               nodeType === 'servingNode' ? 'Serving' : 'New Node',
+               nodeType === 'servingNode' ? 'Serving' :
+               nodeType === 'blockNode' ? 'Block' : 'New Node',
         description: '',
         ingredients: nodeType === 'ingredientNode' ? [] : undefined,
-        onLabelChange: (newLabel: string) => {
-          setNodes((nds) =>
-            nds.map((node) =>
-              node.id === newNode.id
-                ? { ...node, data: { ...node.data, label: newLabel } }
-                : node
-            )
-          )
-        },
-        onDescriptionChange: (newDescription: string) => {
-          setNodes((nds) =>
-            nds.map((node) =>
-              node.id === newNode.id
-                ? { ...node, data: { ...node.data, description: newDescription } }
-                : node
-            )
-          )
-        },
+        ...createNodeCallbacks(nodeId, nodeType),
       },
     }
 
     setNodes((nds) => [...nds, newNode])
+    processedNodesRef.current.add(nodeId)
     antMessage.success('Node added')
-  }, [clickPosition, setNodes])
+  }, [clickPosition, setNodes, createNodeCallbacks])
 
   // Update node data handlers for existing nodes
+  // Always ensure callbacks are present and working
+  // Use a ref to track which nodes have been processed
+  const processedNodesRef = useRef<Set<string>>(new Set())
+  
   useEffect(() => {
+    // Check if any node is missing callbacks
+    const nodesNeedingCallbacks = nodes.filter(node => {
+      const hasCallbacks = 
+        typeof node.data.onLabelChange === 'function' &&
+        typeof node.data.onDescriptionChange === 'function' &&
+        (node.type !== 'ingredientNode' || typeof node.data.onIngredientsChange === 'function')
+      return !hasCallbacks
+    })
+
+    if (nodesNeedingCallbacks.length === 0) {
+      // Update processed ref
+      const currentIds = new Set(nodes.map(n => n.id))
+      processedNodesRef.current = currentIds
+      return // All nodes have valid callbacks
+    }
+
+    // Update only nodes that need callbacks
     setNodes((nds) =>
-      nds.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          onLabelChange: (newLabel: string) => {
-            setNodes((prevNodes) =>
-              prevNodes.map((n) =>
-                n.id === node.id
-                  ? { ...n, data: { ...n.data, label: newLabel } }
-                  : n
-              )
-            )
+      nds.map((node) => {
+        const needsCallbacks = 
+          typeof node.data.onLabelChange !== 'function' ||
+          typeof node.data.onDescriptionChange !== 'function' ||
+          (node.type === 'ingredientNode' && typeof node.data.onIngredientsChange !== 'function')
+
+        if (!needsCallbacks) {
+          processedNodesRef.current.add(node.id)
+          return node // Already has valid callbacks
+        }
+
+        // Create new callbacks using functional updates
+        processedNodesRef.current.add(node.id)
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...createNodeCallbacks(node.id, node.type),
           },
-          onDescriptionChange: (newDescription: string) => {
-            setNodes((prevNodes) =>
-              prevNodes.map((n) =>
-                n.id === node.id
-                  ? { ...n, data: { ...n.data, description: newDescription } }
-                  : n
-              )
-            )
-          },
-        },
-      }))
+        }
+      })
     )
-  }, [setNodes])
+
+    // Clean up ref for deleted nodes
+    const currentIds = new Set(nodes.map(n => n.id))
+    processedNodesRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        processedNodesRef.current.delete(id)
+      }
+    })
+  }, [nodes.length, setNodes, createNodeCallbacks, initialNodes]) // Update when nodes count changes or initialNodes change
 
   // Handle node/edge deletion with keyboard
   useEffect(() => {

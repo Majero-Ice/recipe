@@ -31,7 +31,7 @@ export class ChatService {
 			throw new BadRequestException('Message cannot be empty');
 		}
 
-		const model = 'gpt-4o-mini';
+		const model = 'gpt-5.2-2025-12-11';
 
 		// Формируем историю сообщений
 		const messages = this.buildMessages(request.message, request.history);
@@ -195,7 +195,7 @@ CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as th
 			throw new BadRequestException('Message cannot be empty');
 		}
 
-		const model = 'gpt-4o-mini';
+		const model = 'gpt-5.2-2025-12-11';
 
 		// Определяем, использовать ли JSON режим (всегда используем для структурированных ответов)
 		const useJsonMode = this.shouldUseJsonMode(request.message);

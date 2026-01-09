@@ -64,34 +64,12 @@ function DefaultNodeComponent({ data, selected, id }: NodeProps) {
 
   return (
     <div className={styles.nodeWrapper}>
-      {/* Target handles */}
+      {/* Single invisible center handle for target */}
       <Handle
         type="target"
         position={Position.Top}
-        id="target-top"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Right}
-        id="target-right"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Bottom}
-        id="target-bottom"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="target-left"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
+        id="target"
+        className={styles.centerHandle}
       />
       <Card
         className={`${styles.nodeCard} ${selected ? styles.selected : ''}`}
@@ -152,34 +130,12 @@ function DefaultNodeComponent({ data, selected, id }: NodeProps) {
           </div>
         </div>
       </Card>
-      {/* Source handles */}
-      <Handle
-        type="source"
-        position={Position.Top}
-        id="source-top"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="source-right"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
-      />
+      {/* Single invisible center handle for source */}
       <Handle
         type="source"
         position={Position.Bottom}
-        id="source-bottom"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Left}
-        id="source-left"
-        className={styles.handle}
-        style={{ background: '#1890ff' }}
+        id="source"
+        className={styles.centerHandle}
       />
     </div>
   )

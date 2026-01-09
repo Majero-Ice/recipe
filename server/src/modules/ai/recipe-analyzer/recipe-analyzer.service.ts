@@ -77,7 +77,7 @@ ${message}`;
 						content: analysisPrompt,
 					},
 				],
-				'gpt-4o-mini',
+				'gpt-5.2-2025-12-11',
 			);
 
 			// Парсим JSON ответ

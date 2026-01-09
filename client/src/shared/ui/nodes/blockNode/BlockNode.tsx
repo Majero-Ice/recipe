@@ -1,13 +1,13 @@
 import { memo, useState, useCallback } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Card, Typography, Input } from 'antd'
-import { ExperimentOutlined } from '@ant-design/icons'
-import styles from './preparationNode.module.scss'
+import { FolderOutlined } from '@ant-design/icons'
+import styles from './blockNode.module.scss'
 
 const { Text } = Typography
 const { TextArea } = Input
 
-interface PreparationNodeData extends Record<string, unknown> {
+interface BlockNodeData extends Record<string, unknown> {
   label?: string
   description?: string
   icon?: React.ReactNode
@@ -15,10 +15,10 @@ interface PreparationNodeData extends Record<string, unknown> {
   onDescriptionChange?: (newDescription: string) => void
 }
 
-function PreparationNodeComponent({ data, selected, id }: NodeProps) {
-  const nodeData = data as PreparationNodeData
-  const { label = 'Preparation', description, icon, onLabelChange, onDescriptionChange } = nodeData
-  const displayIcon = icon || <ExperimentOutlined />
+function BlockNodeComponent({ data, selected, id }: NodeProps) {
+  const nodeData = data as BlockNodeData
+  const { label = 'Block', description, icon, onLabelChange, onDescriptionChange } = nodeData
+  const displayIcon = icon || <FolderOutlined />
   const [isEditingLabel, setIsEditingLabel] = useState(false)
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [editedLabel, setEditedLabel] = useState(label)
@@ -85,6 +85,7 @@ function PreparationNodeComponent({ data, selected, id }: NodeProps) {
                 onChange={(e) => setEditedLabel(e.target.value)}
                 onBlur={handleLabelBlur}
                 onKeyDown={handleLabelKeyDown}
+                onClick={(e) => e.stopPropagation()}
                 autoFocus
                 className={styles.editInput}
                 size="small"
@@ -105,6 +106,7 @@ function PreparationNodeComponent({ data, selected, id }: NodeProps) {
                 onChange={(e) => setEditedDescription(e.target.value)}
                 onBlur={handleDescriptionBlur}
                 onKeyDown={handleDescriptionKeyDown}
+                onClick={(e) => e.stopPropagation()}
                 autoFocus
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 className={styles.editTextarea}
@@ -117,6 +119,7 @@ function PreparationNodeComponent({ data, selected, id }: NodeProps) {
                 className={styles.description}
                 onDoubleClick={handleDescriptionDoubleClick}
                 title="Double click to edit"
+                onClick={(e) => e.stopPropagation()}
                 style={{ 
                   minHeight: description ? 'auto' : '20px',
                   cursor: 'text',
@@ -141,5 +144,5 @@ function PreparationNodeComponent({ data, selected, id }: NodeProps) {
   )
 }
 
-export const PreparationNode = memo(PreparationNodeComponent)
+export const BlockNode = memo(BlockNodeComponent)
 

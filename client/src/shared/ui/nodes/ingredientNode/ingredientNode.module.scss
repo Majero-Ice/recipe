@@ -87,6 +87,24 @@
   }
 }
 
+.centerHandle {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  pointer-events: auto;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%);
+  
+  &:hover {
+    opacity: 0.3;
+    background: rgba(82, 196, 26, 0.2);
+    border-radius: 50%;
+  }
+}
+
 .clickable {
   cursor: pointer;
 }
@@ -152,6 +170,28 @@
   color: #8c8c8c;
   margin-left: 12px;
   white-space: nowrap;
+}
+
+.listHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.editIngredientForm {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 8px 0;
+}
+
+.addIngredientForm {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 8px;
 }
 
 .editInput {

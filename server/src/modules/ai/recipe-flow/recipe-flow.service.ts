@@ -91,7 +91,7 @@ Always include clear section headers (Ingredients, Preparation, Cooking, Serving
 			{ role: 'user', content: message },
 		];
 
-		return await this.aiProvider.chat(messages, 'gpt-4o-mini');
+		return await this.aiProvider.chat(messages, 'gpt-5.2-2025-12-11');
 	}
 
 	/**
@@ -125,7 +125,7 @@ Return ONLY a valid JSON object with this exact structure:
   "nodes": [
     {
       "id": "string (unique identifier)",
-      "type": "ingredientNode | preparationNode | cookingNode | servingNode",
+      "type": "ingredientNode | preparationNode | cookingNode | servingNode | blockNode",
       "position": { "x": number, "y": number },
       "data": {
         "label": "string (step name)",
@@ -169,18 +169,59 @@ Node Types:
       { "name": "Salt", "quantity": "1 tsp" }
     ]
   }
+- "blockNode": Use EXCLUSIVELY as the FIRST node of each parallel block. This node identifies and represents the entire block (e.g., "Sauté", "Broth", "Sauce", "Garnish"). It should have a descriptive name that summarizes what the block does. Do NOT use blockNode for regular steps - only as block headers.
 - "preparationNode": Use for preparation steps (e.g., "Chop vegetables", "Marinate meat", "Mix ingredients")
 - "cookingNode": Use for actual cooking steps (e.g., "Boil water", "Fry onions", "Simmer for 30 minutes", "Bake in oven")
 - "servingNode": Use for final steps (e.g., "Serve hot", "Garnish", "Ready to serve")
 
+DIAGRAM STRUCTURE - BLOCK-BASED APPROACH (CRITICAL):
+For complex dishes, organize the recipe into separate, independent BLOCKS/PIPELINES. Each block represents a complete workflow for one component (e.g., "Sauté", "Broth", "Vegetables").
+
+STRUCTURE RULES:
+1. START: Create EXACTLY ONE "ingredientNode" with ALL ingredients. This is the root node.
+2. BLOCK CREATION: From the ingredientNode, create separate edges DIRECTLY to the FIRST node of EACH parallel block. Each block should have a descriptive name as its first node (e.g., "Sauté", "Broth").
+3. WITHIN BLOCKS: Each block is a self-contained sequential pipeline:
+   - Nodes within a block connect sequentially: A → B → C → D
+   - NO connections between nodes from different blocks
+   - Each block flows independently from start to finish
+4. BLOCK MERGING: All parallel blocks converge at a single MERGE node where they combine (e.g., "Add sauté to broth").
+5. AFTER MERGE: After the merge point, continue with a normal sequential flow (one node after another).
+6. NESTED BLOCKS: If needed after merging, you can create new parallel blocks again, following the same pattern.
+
+EXAMPLE STRUCTURE (Borscht):
+- ingredientNode (Ingredients) → branches directly to:
+  * Block 1: blockNode "Sauté" → preparationNode "Prepare onions" → preparationNode "Prepare beets" → cookingNode "Sauté in pan"
+  * Block 2: blockNode "Broth" → preparationNode "Prepare meat" → cookingNode "Cook meat in water" → preparationNode "Prepare potatoes" → cookingNode "Cook potatoes in broth"
+- Both blocks merge at: cookingNode "Add sauté to broth"
+- After merge: cookingNode "Further processes" → servingNode "Ready"
+
+IMPORTANT: The first node of each parallel block MUST be a "blockNode" type. This visually identifies the block. Subsequent nodes within the block can be preparationNode, cookingNode, or other appropriate types.
+
+KEY PRINCIPLES:
+- ingredientNode connects DIRECTLY to the first node of each block (NO intermediate nodes like "Prepare products")
+- Each block is completely independent - NO edges between different blocks
+- Blocks only connect at merge points
+- After merging, use normal sequential flow
+- This creates clear visual separation: each block is a separate pipeline that can be followed independently
+
 Rules:
 - Create EXACTLY ONE "ingredientNode" with ALL ingredients from the recipe in the "ingredients" array
-- Follow with preparation nodes (type: "preparationNode")
-- Then cooking nodes (type: "cookingNode")
-- End with serving node (type: "servingNode")
+- From ingredientNode, create edges DIRECTLY to the FIRST node of EACH parallel block
+- Each block's first node MUST be of type "blockNode" with a descriptive name representing the block (e.g., "Sauté", "Broth", "Sauce", "Garnish")
+- After the blockNode, use appropriate node types (preparationNode, cookingNode, etc.) for subsequent steps within the block
+- Within each block, connect nodes sequentially in a linear chain (A → B → C)
+- Between parallel blocks, create ABSOLUTELY NO connections - they are completely independent pipelines
+- All blocks converge at a merge node where they combine
+- After the merge node, continue with sequential flow (or create new blocks if needed)
 - Position nodes will be automatically calculated by the client, so you can use placeholder positions like { "x": 0, "y": 0 } for all nodes
 - The client will arrange nodes in a hierarchical layout based on the edges, so focus on creating correct node connections rather than precise positioning
-- Connect nodes sequentially showing the cooking process flow
+- Identify opportunities for parallelization: if one step takes a long time (like boiling, simmering, marinating) and another step can be done during that time, they should be separate parallel blocks
+- Common parallel block scenarios:
+  * Block 1: Main component cooking (broth, meat, etc.) - long process
+  * Block 2: Side component preparation (sauté, vegetables, etc.) - can be done during Block 1
+  * Block 3: Additional preparations (garnishes, sides, etc.)
+- The time on edges leading to parallel blocks should reflect the actual time needed for each parallel task
+- After parallel blocks, they converge into a single merge node that combines the results
 - For each edge, include the "time" field indicating how long to wait before proceeding to the next step
 - Time examples: "5 minutes", "10 minutes", "30 minutes", "1 hour", "2 hours", "overnight"
 - If a step requires waiting (e.g., "bake for 1 hour", "marinate for 30 minutes", "let rest for 15 minutes"), include that time in the edge connecting to the next step
@@ -209,13 +250,13 @@ Rules:
 			const openaiClient = (this.aiProvider as any).getClient?.();
 			if (openaiClient) {
 				const stream = await openaiClient.chat.completions.create({
-					model: 'gpt-4o-mini',
+					model: 'gpt-5.2-2025-12-11',
 					messages: messages.map((msg) => ({
 						role: msg.role as 'system' | 'user' | 'assistant',
 						content: msg.content,
 					})),
 					temperature: 0.3,
-					max_tokens: 4000,
+					max_completion_tokens: 4000,
 					response_format: { type: 'json_object' },
 					stream: true,
 				});
@@ -452,7 +493,7 @@ Return ONLY a valid JSON object with this exact structure:
   "nodes": [
     {
       "id": "string (unique identifier)",
-      "type": "ingredientNode | preparationNode | cookingNode | servingNode",
+      "type": "ingredientNode | preparationNode | cookingNode | servingNode | blockNode",
       "position": { "x": number, "y": number },
       "data": {
         "label": "string (step name)",
@@ -496,18 +537,59 @@ Node Types:
       { "name": "Salt", "quantity": "1 tsp" }
     ]
   }
+- "blockNode": Use EXCLUSIVELY as the FIRST node of each parallel block. This node identifies and represents the entire block (e.g., "Sauté", "Broth", "Sauce", "Garnish"). It should have a descriptive name that summarizes what the block does. Do NOT use blockNode for regular steps - only as block headers.
 - "preparationNode": Use for preparation steps (e.g., "Chop vegetables", "Marinate meat", "Mix ingredients")
 - "cookingNode": Use for actual cooking steps (e.g., "Boil water", "Fry onions", "Simmer for 30 minutes", "Bake in oven")
 - "servingNode": Use for final steps (e.g., "Serve hot", "Garnish", "Ready to serve")
 
+DIAGRAM STRUCTURE - BLOCK-BASED APPROACH (CRITICAL):
+For complex dishes, organize the recipe into separate, independent BLOCKS/PIPELINES. Each block represents a complete workflow for one component (e.g., "Sauté", "Broth", "Vegetables").
+
+STRUCTURE RULES:
+1. START: Create EXACTLY ONE "ingredientNode" with ALL ingredients. This is the root node.
+2. BLOCK CREATION: From the ingredientNode, create separate edges DIRECTLY to the FIRST node of EACH parallel block. Each block should have a descriptive name as its first node (e.g., "Sauté", "Broth").
+3. WITHIN BLOCKS: Each block is a self-contained sequential pipeline:
+   - Nodes within a block connect sequentially: A → B → C → D
+   - NO connections between nodes from different blocks
+   - Each block flows independently from start to finish
+4. BLOCK MERGING: All parallel blocks converge at a single MERGE node where they combine (e.g., "Add sauté to broth").
+5. AFTER MERGE: After the merge point, continue with a normal sequential flow (one node after another).
+6. NESTED BLOCKS: If needed after merging, you can create new parallel blocks again, following the same pattern.
+
+EXAMPLE STRUCTURE (Borscht):
+- ingredientNode (Ingredients) → branches directly to:
+  * Block 1: blockNode "Sauté" → preparationNode "Prepare onions" → preparationNode "Prepare beets" → cookingNode "Sauté in pan"
+  * Block 2: blockNode "Broth" → preparationNode "Prepare meat" → cookingNode "Cook meat in water" → preparationNode "Prepare potatoes" → cookingNode "Cook potatoes in broth"
+- Both blocks merge at: cookingNode "Add sauté to broth"
+- After merge: cookingNode "Further processes" → servingNode "Ready"
+
+IMPORTANT: The first node of each parallel block MUST be a "blockNode" type. This visually identifies the block. Subsequent nodes within the block can be preparationNode, cookingNode, or other appropriate types.
+
+KEY PRINCIPLES:
+- ingredientNode connects DIRECTLY to the first node of each block (NO intermediate nodes like "Prepare products")
+- Each block is completely independent - NO edges between different blocks
+- Blocks only connect at merge points
+- After merging, use normal sequential flow
+- This creates clear visual separation: each block is a separate pipeline that can be followed independently
+
 Rules:
 - Create EXACTLY ONE "ingredientNode" with ALL ingredients from the recipe in the "ingredients" array
-- Follow with preparation nodes (type: "preparationNode")
-- Then cooking nodes (type: "cookingNode")
-- End with serving node (type: "servingNode")
+- From ingredientNode, create edges DIRECTLY to the FIRST node of EACH parallel block
+- Each block's first node MUST be of type "blockNode" with a descriptive name representing the block (e.g., "Sauté", "Broth", "Sauce", "Garnish")
+- After the blockNode, use appropriate node types (preparationNode, cookingNode, etc.) for subsequent steps within the block
+- Within each block, connect nodes sequentially in a linear chain (A → B → C)
+- Between parallel blocks, create ABSOLUTELY NO connections - they are completely independent pipelines
+- All blocks converge at a merge node where they combine
+- After the merge node, continue with sequential flow (or create new blocks if needed)
 - Position nodes will be automatically calculated by the client, so you can use placeholder positions like { "x": 0, "y": 0 } for all nodes
 - The client will arrange nodes in a hierarchical layout based on the edges, so focus on creating correct node connections rather than precise positioning
-- Connect nodes sequentially showing the cooking process flow
+- Identify opportunities for parallelization: if one step takes a long time (like boiling, simmering, marinating) and another step can be done during that time, they should be separate parallel blocks
+- Common parallel block scenarios:
+  * Block 1: Main component cooking (broth, meat, etc.) - long process
+  * Block 2: Side component preparation (sauté, vegetables, etc.) - can be done during Block 1
+  * Block 3: Additional preparations (garnishes, sides, etc.)
+- The time on edges leading to parallel blocks should reflect the actual time needed for each parallel task
+- After parallel blocks, they converge into a single merge node that combines the results
 - For each edge, include the "time" field indicating how long to wait before proceeding to the next step
 - Time examples: "5 minutes", "10 minutes", "30 minutes", "1 hour", "2 hours", "overnight"
 - If a step requires waiting (e.g., "bake for 1 hour", "marinate for 30 minutes", "let rest for 15 minutes"), include that time in the edge connecting to the next step
@@ -529,23 +611,23 @@ Rules:
 
 		let response: string | undefined;
 		try {
-			// Используем прямой доступ к OpenAI клиенту для увеличения max_tokens и использования JSON mode
+			// Используем прямой доступ к OpenAI клиенту для увеличения max_completion_tokens и использования JSON mode
 			const openaiClient = (this.aiProvider as any).getClient?.();
 			if (openaiClient) {
 				const completion = await openaiClient.chat.completions.create({
-					model: 'gpt-4o-mini',
+					model: 'gpt-5.2-2025-12-11',
 					messages: messages.map((msg) => ({
 						role: msg.role as 'system' | 'user' | 'assistant',
 						content: msg.content,
 					})),
 					temperature: 0.3,
-					max_tokens: 4000,
+					max_completion_tokens: 4000,
 					response_format: { type: 'json_object' },
 				});
 				response = completion.choices[0]?.message?.content;
 			} else {
 				// Fallback на стандартный метод
-				response = await this.aiProvider.chat(messages, 'gpt-4o-mini');
+				response = await this.aiProvider.chat(messages, 'gpt-5.2-2025-12-11');
 			}
 			
 			if (!response) {

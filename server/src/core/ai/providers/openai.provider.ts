@@ -67,7 +67,7 @@ export class OpenAIProvider implements AiProvider {
 	
 	async chat(
 		messages: Array<{ role: string; content: string }>,
-		model: string = 'gpt-4o-mini',
+		model: string = 'gpt-5.2-2025-12-11',
 	): Promise<string> {
 		if (messages.length === 0) {
 			throw new Error('Messages array cannot be empty');
@@ -81,7 +81,7 @@ export class OpenAIProvider implements AiProvider {
 					content: msg.content,
 				})),
 				temperature: 0.7,
-				max_tokens: 2000, // Increased from 1000 to reduce truncation
+				max_completion_tokens: 2000, // Increased from 1000 to reduce truncation
 			});
 
 			const content = response.choices[0]?.message?.content;
@@ -102,7 +102,7 @@ export class OpenAIProvider implements AiProvider {
 	 */
 	async *chatStream(
 		messages: Array<{ role: string; content: string }>,
-		model: string = 'gpt-4o-mini',
+		model: string = 'gpt-5.2-2025-12-11',
 		useJsonMode: boolean = false,
 	): AsyncGenerator<string, void, unknown> {
 		if (messages.length === 0) {
@@ -117,7 +117,7 @@ export class OpenAIProvider implements AiProvider {
 					content: msg.content,
 				})),
 				temperature: 0.7,
-				max_tokens: 2000,
+				max_completion_tokens: 2000,
 				stream: true as const,
 				...(useJsonMode && { response_format: { type: 'json_object' as const } }),
 			};

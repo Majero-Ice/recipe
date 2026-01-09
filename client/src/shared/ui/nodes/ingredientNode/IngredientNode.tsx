@@ -1,8 +1,8 @@
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Card, Typography, List, Input } from 'antd'
-import { ShoppingOutlined } from '@ant-design/icons'
+import { Card, Typography, List, Input, Button, Space } from 'antd'
+import { ShoppingOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import styles from './ingredientNode.module.scss'
 
 const { Text } = Typography
@@ -20,11 +20,12 @@ interface IngredientNodeData extends Record<string, unknown> {
   ingredients?: Ingredient[]
   onLabelChange?: (newLabel: string) => void
   onDescriptionChange?: (newDescription: string) => void
+  onIngredientsChange?: (ingredients: Ingredient[]) => void
 }
 
-function IngredientNodeComponent({ data, selected, id }: NodeProps) {
+function IngredientNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as IngredientNodeData
-  const { label = 'Ingredients', description, icon, ingredients = [], onLabelChange, onDescriptionChange } = nodeData
+  const { label = 'Ingredients', description, icon, ingredients = [], onLabelChange, onDescriptionChange, onIngredientsChange } = nodeData
   const [isExpanded, setIsExpanded] = useState(false)
   const [listPosition, setListPosition] = useState({ x: 0, y: 0 })
   const nodeRef = useRef<HTMLDivElement>(null)
@@ -33,6 +34,10 @@ function IngredientNodeComponent({ data, selected, id }: NodeProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [editedLabel, setEditedLabel] = useState(label)
   const [editedDescription, setEditedDescription] = useState(description || '')
+  const [editingIngredientIndex, setEditingIngredientIndex] = useState<number | null>(null)
+  const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null)
+  const [newIngredient, setNewIngredient] = useState({ name: '', quantity: '' })
+  const [isAddingIngredient, setIsAddingIngredient] = useState(false)
 
   const handleLabelDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -99,46 +104,92 @@ function IngredientNodeComponent({ data, selected, id }: NodeProps) {
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (ingredients.length > 0) {
-      setIsExpanded(!isExpanded)
-    }
+    setIsExpanded(!isExpanded)
   }
+
+  const handleAddIngredient = useCallback(() => {
+    if (!newIngredient.name.trim()) {
+      return
+    }
+    
+    if (!onIngredientsChange) {
+      console.error('onIngredientsChange is not defined for ingredient node')
+      return
+    }
+    
+    const updatedIngredients = [...ingredients, { ...newIngredient }]
+    onIngredientsChange(updatedIngredients)
+    setNewIngredient({ name: '', quantity: '' })
+    setIsAddingIngredient(false)
+  }, [newIngredient, ingredients, onIngredientsChange])
+
+  const handleDeleteIngredient = useCallback((index: number) => {
+    if (onIngredientsChange) {
+      const updatedIngredients = ingredients.filter((_, i) => i !== index)
+      onIngredientsChange(updatedIngredients)
+      if (editingIngredientIndex === index) {
+        setEditingIngredientIndex(null)
+        setEditingIngredient(null)
+      }
+    }
+  }, [ingredients, onIngredientsChange, editingIngredientIndex])
+
+  const handleSaveEditIngredient = useCallback(() => {
+    if (editingIngredientIndex === null || !editingIngredient) {
+      return
+    }
+    
+    if (!onIngredientsChange) {
+      console.error('onIngredientsChange is not defined for ingredient node')
+      return
+    }
+    
+    const updatedIngredients = ingredients.map((ing, i) => 
+      i === editingIngredientIndex ? { ...editingIngredient } : ing
+    )
+    onIngredientsChange(updatedIngredients)
+    setEditingIngredientIndex(null)
+    setEditingIngredient(null)
+  }, [editingIngredientIndex, editingIngredient, ingredients, onIngredientsChange])
+
+  const handleUpdateEditingIngredient = useCallback((field: 'name' | 'quantity', value: string) => {
+    if (editingIngredient) {
+      setEditingIngredient({ ...editingIngredient, [field]: value })
+    }
+  }, [editingIngredient])
+
+  const handleStartEditIngredient = useCallback((index: number) => {
+    const ingredient = ingredients[index]
+    if (ingredient) {
+      setEditingIngredientIndex(index)
+      setEditingIngredient({ ...ingredient })
+      setIsAddingIngredient(false)
+    }
+  }, [ingredients])
+
+  const handleCancelEditIngredient = useCallback(() => {
+    setEditingIngredientIndex(null)
+    setEditingIngredient(null)
+  }, [])
+
+  const handleStartAddIngredient = useCallback(() => {
+    setIsAddingIngredient(true)
+    setEditingIngredientIndex(null)
+  }, [])
 
   return (
     <div className={styles.nodeWrapper} ref={nodeRef}>
-      {/* Target handles - can receive connections from all sides */}
+      {/* Single invisible center handle for target */}
       <Handle
         type="target"
         position={Position.Top}
-        id="target-top"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Right}
-        id="target-right"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Bottom}
-        id="target-bottom"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
-      />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="target-left"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
+        id="target"
+        className={styles.centerHandle}
       />
       <Card
-        className={`${styles.nodeCard} ${selected ? styles.selected : ''} ${ingredients.length > 0 ? styles.clickable : ''}`}
+        className={`${styles.nodeCard} ${selected ? styles.selected : ''} ${styles.clickable}`}
         size="small"
-        hoverable={ingredients.length > 0}
+        hoverable
         onClick={handleCardClick}
       >
         <div className={styles.nodeContent}>
@@ -195,15 +246,13 @@ function IngredientNodeComponent({ data, selected, id }: NodeProps) {
                 {description || 'Double click to add description'}
               </Text>
             )}
-            {ingredients.length > 0 && (
-              <Text type="secondary" className={styles.ingredientCount}>
-                {ingredients.length} {ingredients.length === 1 ? 'ingredient' : 'ingredients'}
-              </Text>
-            )}
+            <Text type="secondary" className={styles.ingredientCount}>
+              {ingredients.length} {ingredients.length === 1 ? 'ingredient' : 'ingredients'}
+            </Text>
           </div>
         </div>
       </Card>
-      {isExpanded && ingredients.length > 0 && createPortal(
+      {isExpanded && createPortal(
         <div 
           className={styles.ingredientList}
           style={{
@@ -212,54 +261,150 @@ function IngredientNodeComponent({ data, selected, id }: NodeProps) {
             top: `${listPosition.y}px`,
             zIndex: 10000,
           }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <Card size="small" className={styles.listCard}>
+          <Card 
+            size="small" 
+            className={styles.listCard}
+            title={
+              <div className={styles.listHeader}>
+                <Text strong>Ingredients</Text>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={handleStartAddIngredient}
+                >
+                  Add
+                </Button>
+              </div>
+            }
+          >
             <List
               size="small"
               dataSource={ingredients}
-              renderItem={(item) => (
-                <List.Item className={styles.listItem}>
-                  <Text strong className={styles.ingredientName}>
-                    {item.name}
-                  </Text>
-                  <Text className={styles.ingredientQuantity}>
-                    {item.quantity}
-                  </Text>
+              renderItem={(item, index) => (
+                <List.Item 
+                  className={styles.listItem}
+                  actions={[
+                    editingIngredientIndex === index ? (
+                      <Space key="actions" size="small">
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={handleSaveEditIngredient}
+                          disabled={!editingIngredient?.name.trim()}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={handleCancelEditIngredient}
+                        >
+                          Cancel
+                        </Button>
+                      </Space>
+                    ) : (
+                      <Space key="actions" size="small">
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => handleStartEditIngredient(index)}
+                        />
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleDeleteIngredient(index)}
+                        />
+                      </Space>
+                    ),
+                  ]}
+                >
+                  {editingIngredientIndex === index && editingIngredient ? (
+                    <div className={styles.editIngredientForm}>
+                      <Input
+                        value={editingIngredient.name}
+                        onChange={(e) => handleUpdateEditingIngredient('name', e.target.value)}
+                        placeholder="Ingredient name"
+                        size="small"
+                        style={{ marginBottom: 8 }}
+                        onPressEnter={handleSaveEditIngredient}
+                      />
+                      <Input
+                        value={editingIngredient.quantity}
+                        onChange={(e) => handleUpdateEditingIngredient('quantity', e.target.value)}
+                        placeholder="Quantity"
+                        size="small"
+                        onPressEnter={handleSaveEditIngredient}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Text strong className={styles.ingredientName}>
+                        {item.name}
+                      </Text>
+                      <Text className={styles.ingredientQuantity}>
+                        {item.quantity}
+                      </Text>
+                    </>
+                  )}
                 </List.Item>
               )}
             />
+            {isAddingIngredient && (
+              <div className={styles.addIngredientForm}>
+                <Input
+                  value={newIngredient.name}
+                  onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                  placeholder="Ingredient name"
+                  size="small"
+                  style={{ marginBottom: 8 }}
+                  onPressEnter={handleAddIngredient}
+                  autoFocus
+                />
+                <Input
+                  value={newIngredient.quantity}
+                  onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })}
+                  placeholder="Quantity"
+                  size="small"
+                  style={{ marginBottom: 8 }}
+                  onPressEnter={handleAddIngredient}
+                />
+                <Space>
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={handleAddIngredient}
+                    disabled={!newIngredient.name.trim()}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setIsAddingIngredient(false)
+                      setNewIngredient({ name: '', quantity: '' })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </Space>
+              </div>
+            )}
           </Card>
         </div>,
         document.body
       )}
-      {/* Source handles - can send connections to all sides */}
-      <Handle
-        type="source"
-        position={Position.Top}
-        id="source-top"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="source-right"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
-      />
+      {/* Single invisible center handle for source */}
       <Handle
         type="source"
         position={Position.Bottom}
-        id="source-bottom"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Left}
-        id="source-left"
-        className={styles.handle}
-        style={{ background: '#52c41a' }}
+        id="source"
+        className={styles.centerHandle}
       />
     </div>
   )
