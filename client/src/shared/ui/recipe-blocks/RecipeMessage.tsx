@@ -7,8 +7,8 @@ interface RecipeMessageProps {
 }
 
 /**
- * Компонент для отображения структурированного рецепта
- * Вся логика парсинга выполняется на сервере
+ * Component for displaying structured recipe
+ * All parsing logic is executed on the server
  */
 export function RecipeMessage({ blocks }: RecipeMessageProps) {
   if (blocks.length === 0) {

@@ -16,7 +16,7 @@ export function MacronutrientsChart({ nutritionalInfo }: MacronutrientsChartProp
           show: false,
         },
       },
-      labels: ['Белки', 'Жиры', 'Углеводы'],
+      labels: ['Protein', 'Fat', 'Carbohydrates'],
       colors: ['#3b82f6', '#ef4444', '#f59e0b'],
       legend: {
         position: 'bottom',
@@ -28,7 +28,7 @@ export function MacronutrientsChart({ nutritionalInfo }: MacronutrientsChartProp
       },
       tooltip: {
         y: {
-          formatter: (val: number) => `${val.toFixed(1)} г`,
+          formatter: (val: number) => `${val.toFixed(1)} g`,
         },
       },
       plotOptions: {
@@ -46,16 +46,16 @@ export function MacronutrientsChart({ nutritionalInfo }: MacronutrientsChartProp
                 show: true,
                 fontSize: '24px',
                 fontWeight: 700,
-                formatter: (val: string) => `${val} г`,
+                formatter: (val: string) => `${val} g`,
               },
               total: {
                 show: true,
-                label: 'Всего',
+                label: 'Total',
                 fontSize: '16px',
                 fontWeight: 600,
                 formatter: () => {
                   const total = nutritionalInfo.protein + nutritionalInfo.fat + nutritionalInfo.carbohydrates
-                  return `${total.toFixed(1)} г`
+                  return `${total.toFixed(1)} g`
                 },
               },
             },
@@ -73,10 +73,11 @@ export function MacronutrientsChart({ nutritionalInfo }: MacronutrientsChartProp
 
   return (
     <div>
-      <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Макронутриенты</h3>
+      <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Macronutrients</h3>
       <Chart options={chartOptions} series={chartSeries} type="donut" height={350} />
     </div>
   )
 }
+
 
 

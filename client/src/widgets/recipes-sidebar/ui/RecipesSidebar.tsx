@@ -13,7 +13,7 @@ interface RecipesSidebarProps {
   onToggle: () => void
   onLoadRecipe: (recipe: SavedRecipe) => void
   onNewRecipe?: () => void
-  refreshTrigger?: number // Триггер для обновления списка
+  refreshTrigger?: number // Trigger to refresh the list
 }
 
 const DEFAULT_WIDTH = 300
@@ -28,7 +28,7 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
 
   const loadRecipes = () => {
     const savedRecipes = recipeStorage.getAll()
-    // Сортируем по дате сохранения (новые первыми)
+    // Sort by save date (newest first)
     savedRecipes.sort((a, b) => b.savedAt - a.savedAt)
     setRecipes(savedRecipes)
   }
@@ -37,15 +37,15 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
     try {
       recipeStorage.delete(id)
       loadRecipes()
-      antMessage.success('Рецепт удалён')
+      antMessage.success('Recipe deleted')
     } catch (error) {
-      antMessage.error('Не удалось удалить рецепт')
+      antMessage.error('Failed to delete recipe')
     }
   }
 
   const handleLoadRecipe = useCallback((recipe: SavedRecipe) => {
     onLoadRecipe(recipe)
-    antMessage.success('Рецепт загружен')
+    antMessage.success('Recipe loaded')
   }, [onLoadRecipe])
 
   return (
@@ -58,7 +58,7 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
       >
         <div className={styles.content}>
           <div className={styles.header}>
-            <Title level={4} className={styles.title}>Сохранённые рецепты</Title>
+            <Title level={4} className={styles.title}>Saved Recipes</Title>
             <div className={styles.headerActions}>
               {onNewRecipe && (
                 <Button
@@ -67,9 +67,9 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
                   size="small"
                   onClick={onNewRecipe}
                   className={styles.newRecipeButton}
-                  title="Создать новый рецепт"
+                  title="Create new recipe"
                 >
-                  Новый
+                  New
                 </Button>
               )}
               <ToggleChatButton isOpen={isOpen} onClick={onToggle} />
@@ -78,7 +78,7 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
           
           <div className={styles.recipesList}>
             {recipes.length === 0 ? (
-              <Empty description="Нет сохранённых рецептов" />
+              <Empty description="No saved recipes" />
             ) : (
               <List
                 dataSource={recipes}
@@ -87,11 +87,11 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
                     className={styles.recipeItem}
                     actions={[
                       <Popconfirm
-                        title="Удалить рецепт?"
-                        description="Это действие нельзя отменить"
+                        title="Delete recipe?"
+                        description="This action cannot be undone"
                         onConfirm={() => handleDelete(recipe.id)}
-                        okText="Да"
-                        cancelText="Нет"
+                        okText="Yes"
+                        cancelText="No"
                         key="delete"
                       >
                         <Button
@@ -109,7 +109,7 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
                           className={styles.recipeTitle}
                           onClick={() => handleLoadRecipe(recipe)}
                         >
-                          {recipe.name || 'Без названия'}
+                          {recipe.name || 'Untitled'}
                         </div>
                       }
                     />

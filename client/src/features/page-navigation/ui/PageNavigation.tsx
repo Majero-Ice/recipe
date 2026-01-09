@@ -30,13 +30,13 @@ export function PageNavigation({ onNavigate }: PageNavigationProps) {
   return (
     <>
       {showLeftArrow && (
-        <button className={styles.navButton} onClick={handleLeftClick} aria-label="Перейти к Flow">
+        <button className={styles.navButton} onClick={handleLeftClick} aria-label="Go to Flow">
           <LeftOutlined className={styles.icon} />
           <span className={styles.label}>Flow</span>
         </button>
       )}
       {showRightArrow && (
-        <button className={styles.navButton} onClick={handleRightClick} aria-label="Перейти к Stats">
+        <button className={styles.navButton} onClick={handleRightClick} aria-label="Go to Stats">
           <RightOutlined className={styles.icon} />
           <span className={styles.label}>Stats</span>
         </button>
@@ -44,5 +44,6 @@ export function PageNavigation({ onNavigate }: PageNavigationProps) {
     </>
   )
 }
+
 
 

@@ -320,7 +320,7 @@ export function FlowCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes || [])
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges || [])
   
-  // Отслеживаем изменения nodes и edges для уведомления внешних компонентов
+  // Track changes in nodes and edges to notify external components
   const previousNodesRef = useRef<Node[]>([])
   const previousEdgesRef = useRef<Edge[]>([])
   const previousNodesLengthRef = useRef<number>(0)
@@ -329,7 +329,7 @@ export function FlowCanvas({
   const edgesChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
-    // Используем debounce для избежания лишних обновлений
+    // Use debounce to avoid unnecessary updates
     if (nodesChangeTimeoutRef.current) {
       clearTimeout(nodesChangeTimeoutRef.current)
     }
@@ -354,7 +354,7 @@ export function FlowCanvas({
   }, [nodes, externalOnNodesChange])
 
   useEffect(() => {
-    // Используем debounce для избежания лишних обновлений
+    // Use debounce to avoid unnecessary updates
     if (edgesChangeTimeoutRef.current) {
       clearTimeout(edgesChangeTimeoutRef.current)
     }
@@ -387,7 +387,7 @@ export function FlowCanvas({
   const previousInitialNodesRef = useRef<Node[] | undefined>(undefined)
   const previousInitialEdgesRef = useRef<Edge[] | undefined>(undefined)
   
-  // Используем более эффективное сравнение - по длине и первому элементу вместо полного JSON.stringify
+  // Use more efficient comparison - by length and first element instead of full JSON.stringify
   const initialNodesKey = useMemo(() => {
     if (!initialNodes || initialNodes.length === 0) return ''
     return `${initialNodes.length}-${initialNodes[0]?.id || ''}`
@@ -641,17 +641,17 @@ export function FlowCanvas({
     }
   }, [setNodes, setEdges])
 
-  // Загружаем сохранённые узлы и рёбра только при изменении initialNodes/initialEdges
+  // Load saved nodes and edges only when initialNodes/initialEdges change
   useEffect(() => {
-    // Если initialNodes не определен, пропускаем (ожидание генерации или загрузки)
+    // If initialNodes is undefined, skip (waiting for generation or loading)
     if (initialNodes === undefined) {
-      // Если initialNodes стал undefined, сбрасываем предыдущие значения
+      // If initialNodes became undefined, reset previous values
       previousInitialNodesRef.current = undefined
       previousInitialEdgesRef.current = undefined
       return
     }
 
-    // Если initialNodes это пустой массив, очищаем nodes и edges
+    // If initialNodes is empty array, clear nodes and edges
     if (initialNodes.length === 0) {
       setNodes([])
       setEdges([])
@@ -660,14 +660,14 @@ export function FlowCanvas({
       return
     }
 
-    // Проверяем, изменились ли данные, сравнивая ссылки и ключи
+    // Check if data changed by comparing references and keys
     const nodesChanged = previousInitialNodesRef.current !== initialNodes || 
                         initialNodesKey !== `${initialNodes.length}-${initialNodes[0]?.id || ''}`
     const edgesChanged = previousInitialEdgesRef.current !== initialEdges ||
                         initialEdgesKey !== `${initialEdges?.length || 0}-${initialEdges?.[0]?.id || ''}`
     
     if (nodesChanged || edgesChanged) {
-      // Загружаем сохранённые узлы и рёбра только если они действительно изменились
+      // Load saved nodes and edges only if they actually changed
       setNodes(initialNodes)
       setEdges(initialEdges || [])
       previousInitialNodesRef.current = initialNodes
@@ -676,11 +676,11 @@ export function FlowCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNodes, initialEdges, initialNodesKey, initialEdgesKey])
 
-  // Загружаем flow данные только если нет initialNodes (чтобы не перезаписывать загруженный рецепт)
+  // Load flow data only if there are no initialNodes (to avoid overwriting loaded recipe)
   const previousRecipeRef = useRef<string | undefined>(undefined)
   const previousMessageRef = useRef<string | undefined>(undefined)
   
-  // Инициализируем refs при загрузке initialNodes/initialEdges
+  // Initialize refs when loading initialNodes/initialEdges
   useEffect(() => {
     if (initialNodes && initialNodes.length > 0) {
       previousNodesRef.current = initialNodes
@@ -693,12 +693,12 @@ export function FlowCanvas({
   }, [initialNodes, initialEdges])
   
   useEffect(() => {
-    // Проверяем, изменились ли recipe или message
+    // Check if recipe or message changed
     const recipeChanged = recipe !== previousRecipeRef.current
     const messageChanged = message !== previousMessageRef.current
     
     if ((recipe || message) && !initialNodes && (recipeChanged || messageChanged)) {
-      // Сбрасываем предыдущие значения при загрузке нового рецепта
+      // Reset previous values when loading new recipe
       previousInitialNodesRef.current = ''
       previousInitialEdgesRef.current = ''
       previousRecipeRef.current = recipe
@@ -710,20 +710,20 @@ export function FlowCanvas({
 
   const handleSave = () => {
     if (!nodes || nodes.length === 0) {
-      antMessage.warning('Нет данных для сохранения')
+      antMessage.warning('No data to save')
       return
     }
 
     Modal.confirm({
-      title: 'Сохранить рецепт',
+      title: 'Save Recipe',
       content: (
         <div style={{ marginTop: 16 }}>
           <Input
-            placeholder="Название рецепта"
+            placeholder="Recipe name"
             id="recipe-name-input"
             onPressEnter={(e) => {
               const input = e.currentTarget
-              const name = input.value.trim() || `Рецепт ${new Date().toLocaleDateString('ru-RU')}`
+              const name = input.value.trim() || `Recipe ${new Date().toLocaleDateString('en-US')}`
               if (onSave) {
                 onSave(nodes, edges, recipe, message)
               }
@@ -733,11 +733,11 @@ export function FlowCanvas({
           />
         </div>
       ),
-      okText: 'Сохранить',
-      cancelText: 'Отмена',
+      okText: 'Save',
+      cancelText: 'Cancel',
       onOk: () => {
         const input = document.getElementById('recipe-name-input') as HTMLInputElement
-        const name = input?.value.trim() || `Рецепт ${new Date().toLocaleDateString('ru-RU')}`
+        const name = input?.value.trim() || `Recipe ${new Date().toLocaleDateString('en-US')}`
         if (onSave) {
           onSave(nodes, edges, recipe, message)
         }
@@ -789,10 +789,10 @@ export function FlowCanvas({
       type: nodeType,
       position: clickPosition,
       data: {
-        label: nodeType === 'ingredientNode' ? 'Ингредиенты' :
-               nodeType === 'preparationNode' ? 'Подготовка' :
-               nodeType === 'cookingNode' ? 'Приготовление' :
-               nodeType === 'servingNode' ? 'Подача' : 'Новый узел',
+        label: nodeType === 'ingredientNode' ? 'Ingredients' :
+               nodeType === 'preparationNode' ? 'Preparation' :
+               nodeType === 'cookingNode' ? 'Cooking' :
+               nodeType === 'servingNode' ? 'Serving' : 'New Node',
         description: '',
         ingredients: nodeType === 'ingredientNode' ? [] : undefined,
         onLabelChange: (newLabel: string) => {
@@ -817,7 +817,7 @@ export function FlowCanvas({
     }
 
     setNodes((nds) => [...nds, newNode])
-    antMessage.success('Узел добавлен')
+    antMessage.success('Node added')
   }, [clickPosition, setNodes])
 
   // Update node data handlers for existing nodes
@@ -887,12 +887,12 @@ export function FlowCanvas({
 
   // Callback when nodes are deleted
   const onNodesDelete: OnNodesDelete = useCallback((deleted) => {
-    antMessage.info(`Удалено узлов: ${deleted.length}`)
+    antMessage.info(`Deleted nodes: ${deleted.length}`)
   }, [])
 
   // Callback when edges are deleted
   const onEdgesDelete: OnEdgesDelete = useCallback((deleted) => {
-    antMessage.info(`Удалено связей: ${deleted.length}`)
+    antMessage.info(`Deleted edges: ${deleted.length}`)
   }, [])
 
   return (
@@ -936,14 +936,14 @@ export function FlowCanvas({
             onClick={handleSave}
             disabled={isStreaming}
           >
-            Сохранить рецепт
+            Save Recipe
           </Button>
         </div>
       )}
       {isSavedRecipe && nodes && nodes.length > 0 && (
         <div className={styles.saveButton}>
           <div className={styles.autoSaveIndicator}>
-            Изменения сохраняются автоматически
+            Changes are saved automatically
           </div>
         </div>
       )}

@@ -47,7 +47,7 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
     return []
   })
 
-  // Уведомляем родителя об изменении сообщений только при реальных изменениях
+  // Notify parent about message changes only on real changes
   const previousMessagesRef = useRef<string>(JSON.stringify(messages))
   
   useEffect(() => {
@@ -75,7 +75,7 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
     scrollToBottom()
   }, [messages])
 
-  // Обновляем сообщения при изменении initialMessages (только если действительно изменились)
+  // Update messages when initialMessages changes (only if actually changed)
   const previousInitialMessagesRef = useRef<string>(JSON.stringify(initialMessages))
   
   useEffect(() => {
@@ -92,7 +92,7 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
         previousMessagesRef.current = JSON.stringify(mappedMessages)
       }
     } else if (!initialMessages && previousInitialMessagesRef.current !== 'null' && previousInitialMessagesRef.current !== '') {
-      // Если initialMessages стал undefined, очищаем сообщения только если они были загружены ранее
+      // If initialMessages became undefined, clear messages only if they were loaded before
       setMessages([])
       previousInitialMessagesRef.current = 'null'
       previousMessagesRef.current = '[]'
@@ -295,7 +295,7 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
             ) : (
               <>
                 {messages.map((msg) => {
-                  // Проверяем, есть ли блоки рецепта (даже если isRecipe false, но блоки есть)
+                  // Check if there are recipe blocks (even if isRecipe is false, but blocks exist)
                   const hasRecipeBlocks = !msg.isUser && msg.recipe && msg.recipe.blocks && msg.recipe.blocks.length > 0
                   const isRecipe = !msg.isUser && msg.recipe?.isRecipe
                   const shouldShowBlocks = hasRecipeBlocks || isRecipe

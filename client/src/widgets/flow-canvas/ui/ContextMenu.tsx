@@ -21,27 +21,27 @@ const menuItems: MenuProps['items'] = [
   {
     key: 'defaultNode',
     icon: <AppstoreOutlined />,
-    label: 'Обычный узел',
+    label: 'Default Node',
   },
   {
     key: 'ingredientNode',
     icon: <ShoppingOutlined />,
-    label: 'Ингредиенты',
+    label: 'Ingredients',
   },
   {
     key: 'preparationNode',
     icon: <ExperimentOutlined />,
-    label: 'Подготовка',
+    label: 'Preparation',
   },
   {
     key: 'cookingNode',
     icon: <FireOutlined />,
-    label: 'Приготовление',
+    label: 'Cooking',
   },
   {
     key: 'servingNode',
     icon: <CheckCircleOutlined />,
-    label: 'Подача',
+    label: 'Serving',
   },
 ]
 
@@ -67,4 +67,5 @@ function ContextMenuComponent({ x, y, onClose, onAddNode }: ContextMenuProps) {
 }
 
 export const ContextMenu = memo(ContextMenuComponent)
+
 

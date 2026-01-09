@@ -37,41 +37,41 @@ export function MainPage() {
   const dispatch = useAppDispatch()
   const previousRecipeIdRef = useRef<string | undefined>(undefined)
 
-  // Автоматическое сохранение текущего рецепта
-  const autoSaveCurrentRecipe = useCallback((recipeId: string) => {
+  // Auto-save current recipe
+  const autoSaveCurrentRecipe = useCallback((recipeId: string, nodes: Node[], edges: Edge[]) => {
     try {
       const savedRecipe = recipeStorage.getById(recipeId)
       if (!savedRecipe) return
 
-      // Преобразуем Date в timestamp для сохранения
+      // Convert Date to timestamp for saving
       const chatMessagesToSave = chatMessages?.map((msg) => ({
         ...msg,
         timestamp: (msg.timestamp as any) instanceof Date ? (msg.timestamp as Date).getTime() : (typeof msg.timestamp === 'number' ? msg.timestamp : Date.now()),
       }))
 
       recipeStorage.update(recipeId, {
-        nodes: currentNodes,
-        edges: currentEdges,
+        nodes: nodes,
+        edges: edges,
         nutritionalInfo: nutritionalInfo || undefined,
         chatMessages: chatMessagesToSave || undefined,
       })
 
-      // Обновляем trigger для обновления списка
+      // Update trigger to refresh list
       setRefreshRecipesTrigger((prev) => prev + 1)
     } catch (error) {
       console.error('Error auto-saving recipe:', error)
     }
-  }, [currentNodes, currentEdges, chatMessages, nutritionalInfo])
+  }, [chatMessages, nutritionalInfo])
 
   const handleGenerateFlow = (recipe?: string, message?: string) => {
-    // Автоматически сохраняем предыдущий рецепт перед генерацией нового
+    // Auto-save previous recipe before generating new one
     if (previousRecipeIdRef.current && (currentNodes.length > 0 || currentEdges.length > 0)) {
-      autoSaveCurrentRecipe(previousRecipeIdRef.current)
+      autoSaveCurrentRecipe(previousRecipeIdRef.current, currentNodes, currentEdges)
     }
     
     setFlowRecipe(recipe)
     setFlowMessage(message)
-    // Очищаем сохранённые данные при генерации нового рецепта
+    // Clear saved data when generating new recipe
     setSavedNodes(undefined)
     setSavedEdges(undefined)
     setCurrentRecipeId(undefined)
@@ -80,41 +80,41 @@ export function MainPage() {
   }
 
   const handleNewRecipe = useCallback(() => {
-    // Автоматически сохраняем текущий рецепт перед созданием нового
+    // Auto-save current recipe before creating new one
     if (previousRecipeIdRef.current && (currentNodes.length > 0 || currentEdges.length > 0)) {
-      autoSaveCurrentRecipe(previousRecipeIdRef.current)
+      autoSaveCurrentRecipe(previousRecipeIdRef.current, currentNodes, currentEdges)
     }
     
-    // Очищаем все данные для нового рецепта
+    // Clear all data for new recipe
     setFlowRecipe(undefined)
     setFlowMessage(undefined)
-    setSavedNodes([]) // Устанавливаем пустой массив для очистки диаграммы
-    setSavedEdges([]) // Устанавливаем пустой массив для очистки диаграммы
-    setCurrentNodes([]) // Очищаем диаграмму (nodes)
-    setCurrentEdges([]) // Очищаем диаграмму (edges)
+    setSavedNodes([]) // Set empty array to clear diagram
+    setSavedEdges([]) // Set empty array to clear diagram
+    setCurrentNodes([]) // Clear diagram (nodes)
+    setCurrentEdges([]) // Clear diagram (edges)
     setCurrentRecipeId(undefined)
-    setChatMessages(undefined) // Очищаем чат
+    setChatMessages(undefined) // Clear chat
     dispatch(setNutritionalInfo(null))
     previousRecipeIdRef.current = undefined
     
-    // Закрываем сайдбар рецептов
+    // Close recipes sidebar
     setIsRecipesSidebarOpen(false)
     
-    antMessage.success('Новый рецепт создан')
+    antMessage.success('New recipe created')
   }, [currentNodes, currentEdges, autoSaveCurrentRecipe, dispatch])
 
   const handleSaveRecipe = (nodes: Node[], edges: Edge[], recipe?: string, message?: string) => {
-    // Предотвращаем сохранение, если это уже загруженный рецепт
+    // Prevent saving if this is already a loaded recipe
     if (currentRecipeId) {
-      antMessage.warning('Этот рецепт уже сохранён. Изменения сохраняются автоматически.')
+      antMessage.warning('This recipe is already saved. Changes are saved automatically.')
       return
     }
 
     try {
       const input = document.getElementById('recipe-name-input') as HTMLInputElement
-      const name = input?.value.trim() || `Рецепт ${new Date().toLocaleDateString('ru-RU')}`
+      const name = input?.value.trim() || `Recipe ${new Date().toLocaleDateString('en-US')}`
       
-      // Преобразуем Date в timestamp для сохранения
+      // Convert Date to timestamp for saving
       const chatMessagesToSave = chatMessages?.map((msg) => ({
         ...msg,
         timestamp: (msg.timestamp as any) instanceof Date ? (msg.timestamp as Date).getTime() : (typeof msg.timestamp === 'number' ? msg.timestamp : Date.now()),
@@ -130,30 +130,30 @@ export function MainPage() {
         chatMessages: chatMessagesToSave || undefined,
       })
 
-      // Устанавливаем текущий ID рецепта
+      // Set current recipe ID
       setCurrentRecipeId(savedRecipe.id)
       previousRecipeIdRef.current = savedRecipe.id
       
-      antMessage.success('Рецепт сохранён')
+      antMessage.success('Recipe saved')
       setIsRecipesSidebarOpen(true)
       setRefreshRecipesTrigger((prev) => prev + 1)
     } catch (error) {
-      antMessage.error('Не удалось сохранить рецепт')
+      antMessage.error('Failed to save recipe')
       console.error('Error saving recipe:', error)
     }
   }
 
   const handleLoadRecipe = useCallback((savedRecipe: SavedRecipe) => {
-    // Автоматически сохраняем предыдущий рецепт перед загрузкой нового
+    // Auto-save previous recipe before loading new one
     if (previousRecipeIdRef.current && previousRecipeIdRef.current !== savedRecipe.id && (currentNodes.length > 0 || currentEdges.length > 0)) {
-      autoSaveCurrentRecipe(previousRecipeIdRef.current)
+      autoSaveCurrentRecipe(previousRecipeIdRef.current, currentNodes, currentEdges)
     }
 
-    // Отмечаем, что это начальная загрузка, чтобы не сохранять сразу
+    // Mark as initial load to prevent immediate save
     isInitialLoadRef.current = true
 
-    // Оптимизируем загрузку: выполняем все обновления синхронно, но используем батчинг React
-    // Загружаем диаграмму напрямую
+    // Optimize loading: perform all updates synchronously, but use React batching
+    // Load diagram directly
     setSavedNodes(savedRecipe.nodes)
     setSavedEdges(savedRecipe.edges)
     setCurrentNodes(savedRecipe.nodes)
@@ -161,13 +161,13 @@ export function MainPage() {
     setCurrentRecipeId(savedRecipe.id)
     previousRecipeIdRef.current = savedRecipe.id
     
-    // Загружаем графики (nutritional info)
+    // Load charts (nutritional info)
     dispatch(setNutritionalInfo(savedRecipe.nutritionalInfo || null))
     
-    // Загружаем чат (преобразуем timestamp обратно в Date только если нужно)
-    // Используем мемоизацию для оптимизации преобразования
+    // Load chat (convert timestamp back to Date if needed)
+    // Use memoization for optimization
     if (savedRecipe.chatMessages && savedRecipe.chatMessages.length > 0) {
-      // Преобразуем только если timestamp - число, иначе используем как есть
+      // Convert only if timestamp is a number, otherwise use as is
       const messagesWithDates = savedRecipe.chatMessages.map((msg) => ({
         ...msg,
         timestamp: typeof msg.timestamp === 'number' ? new Date(msg.timestamp) : (msg.timestamp as Date),
@@ -177,7 +177,7 @@ export function MainPage() {
       setChatMessages(undefined)
     }
     
-    // Очищаем текущие рецепт и сообщение, чтобы не перезагружать flow
+    // Clear current recipe and message to avoid reloading flow
     setFlowRecipe(undefined)
     setFlowMessage(undefined)
   }, [dispatch, autoSaveCurrentRecipe, currentNodes, currentEdges])
@@ -186,12 +186,12 @@ export function MainPage() {
     dispatch(setCurrentPage(page))
   }
 
-  // Используем useRef для отслеживания предыдущих сообщений
+  // Use useRef to track previous messages
   const previousChatMessagesRef = useRef<string>('')
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const isInitialLoadRef = useRef<boolean>(false)
   
-  // Мемоизируем callback для onMessagesChange, чтобы избежать бесконечных циклов
+  // Memoize callback for onMessagesChange to avoid infinite loops
   const handleMessagesChange = useCallback((msgs: Array<{
     id: number
     text: string
@@ -199,7 +199,7 @@ export function MainPage() {
     isUser: boolean
     recipe?: any
   }>) => {
-    // Проверяем, действительно ли сообщения изменились
+    // Check if messages actually changed
     const newMessagesString = JSON.stringify(msgs)
     if (newMessagesString !== previousChatMessagesRef.current) {
       previousChatMessagesRef.current = newMessagesString
@@ -207,7 +207,7 @@ export function MainPage() {
     }
   }, [])
   
-  // Обновляем ref при изменении chatMessages извне (например, при загрузке рецепта)
+  // Update ref when chatMessages changes externally (e.g., when loading recipe)
   useEffect(() => {
     if (chatMessages) {
       previousChatMessagesRef.current = JSON.stringify(chatMessages)
@@ -216,24 +216,24 @@ export function MainPage() {
     }
   }, [chatMessages])
 
-  // Автоматическое сохранение при изменении nodes/edges для текущего рецепта
+  // Auto-save when nodes/edges change for current recipe
   useEffect(() => {
-    // Не сохраняем при первой загрузке
+    // Don't save on initial load
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false
       return
     }
 
-    // Сохраняем только если есть текущий рецепт и есть изменения
+    // Save only if there's a current recipe and there are changes
     if (currentRecipeId && (currentNodes.length > 0 || currentEdges.length > 0)) {
-      // Используем debounce для избежания частых сохранений
+      // Use debounce to avoid frequent saves
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current)
       }
 
       autoSaveTimeoutRef.current = setTimeout(() => {
-        autoSaveCurrentRecipe(currentRecipeId)
-      }, 2000) // Сохраняем через 2 секунды после последнего изменения
+        autoSaveCurrentRecipe(currentRecipeId, currentNodes, currentEdges)
+      }, 2000) // Save 2 seconds after last change
 
       return () => {
         if (autoSaveTimeoutRef.current) {

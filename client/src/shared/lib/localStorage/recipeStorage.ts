@@ -14,7 +14,7 @@ export interface SavedRecipe {
   chatMessages?: Array<{
     id: number
     text: string
-    timestamp: number // Сохраняем как timestamp для сериализации
+    timestamp: number // Save as timestamp for serialization
     isUser: boolean
     recipe?: StructuredRecipe
   }>
@@ -24,7 +24,7 @@ const STORAGE_KEY = 'saved_recipes'
 
 export const recipeStorage = {
   /**
-   * Получить все сохранённые рецепты
+   * Get all saved recipes
    */
   getAll(): SavedRecipe[] {
     try {
@@ -38,7 +38,7 @@ export const recipeStorage = {
   },
 
   /**
-   * Сохранить рецепт
+   * Save recipe
    */
   save(recipe: Omit<SavedRecipe, 'id' | 'savedAt'>): SavedRecipe {
     const savedRecipe: SavedRecipe = {
@@ -61,7 +61,7 @@ export const recipeStorage = {
   },
 
   /**
-   * Удалить рецепт
+   * Delete recipe
    */
   delete(id: string): void {
     const recipes = this.getAll().filter((r) => r.id !== id)
@@ -74,14 +74,14 @@ export const recipeStorage = {
   },
 
   /**
-   * Получить рецепт по ID
+   * Get recipe by ID
    */
   getById(id: string): SavedRecipe | null {
     const recipes = this.getAll()
     const recipe = recipes.find((r) => r.id === id)
     if (!recipe) return null
     
-    // Преобразуем timestamp обратно в Date для chatMessages
+    // Convert timestamp back to Date for chatMessages
     if (recipe.chatMessages) {
       recipe.chatMessages = recipe.chatMessages.map((msg) => ({
         ...msg,
@@ -93,7 +93,7 @@ export const recipeStorage = {
   },
 
   /**
-   * Обновить рецепт
+   * Update recipe
    */
   update(id: string, updates: Partial<SavedRecipe>): SavedRecipe | null {
     const recipes = this.getAll()

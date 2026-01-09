@@ -25,10 +25,10 @@ export function CaloriesChart({ nutritionalInfo }: CaloriesChartProps) {
       },
       dataLabels: {
         enabled: true,
-        formatter: (val: number) => `${val} ккал`,
+        formatter: (val: number) => `${val} kcal`,
       },
       xaxis: {
-        categories: ['Калории'],
+        categories: ['Calories'],
         labels: {
           style: {
             fontSize: '14px',
@@ -37,7 +37,7 @@ export function CaloriesChart({ nutritionalInfo }: CaloriesChartProps) {
       },
       yaxis: {
         title: {
-          text: 'ккал',
+          text: 'kcal',
           style: {
             fontSize: '14px',
           },
@@ -49,7 +49,7 @@ export function CaloriesChart({ nutritionalInfo }: CaloriesChartProps) {
       colors: ['#10b981'],
       tooltip: {
         y: {
-          formatter: (val: number) => `${val} ккал`,
+          formatter: (val: number) => `${val} kcal`,
         },
       },
       grid: {
@@ -64,7 +64,7 @@ export function CaloriesChart({ nutritionalInfo }: CaloriesChartProps) {
   const chartSeries = useMemo(
     () => [
       {
-        name: 'Калории',
+        name: 'Calories',
         data: [nutritionalInfo.calories],
       },
     ],
@@ -73,10 +73,11 @@ export function CaloriesChart({ nutritionalInfo }: CaloriesChartProps) {
 
   return (
     <div>
-      <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Калории</h3>
+      <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Calories</h3>
       <Chart options={chartOptions} series={chartSeries} type="bar" height={300} />
     </div>
   )
 }
+
 
 

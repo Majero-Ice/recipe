@@ -9,10 +9,10 @@ interface DetailedNutritionChartProps {
 
 export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionChartProps) {
   const categories = useMemo(() => {
-    const cats: string[] = ['Белки', 'Жиры', 'Углеводы']
-    if (nutritionalInfo.fiber !== undefined) cats.push('Клетчатка')
-    if (nutritionalInfo.sugar !== undefined) cats.push('Сахар')
-    if (nutritionalInfo.sodium !== undefined) cats.push('Натрий')
+    const cats: string[] = ['Protein', 'Fat', 'Carbohydrates']
+    if (nutritionalInfo.fiber !== undefined) cats.push('Fiber')
+    if (nutritionalInfo.sugar !== undefined) cats.push('Sugar')
+    if (nutritionalInfo.sodium !== undefined) cats.push('Sodium')
     return cats
   }, [nutritionalInfo])
 
@@ -24,15 +24,15 @@ export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionCha
     ]
     if (nutritionalInfo.fiber !== undefined) vals.push(nutritionalInfo.fiber)
     if (nutritionalInfo.sugar !== undefined) vals.push(nutritionalInfo.sugar)
-    if (nutritionalInfo.sodium !== undefined) vals.push(nutritionalInfo.sodium) // Натрий в миллиграммах
+    if (nutritionalInfo.sodium !== undefined) vals.push(nutritionalInfo.sodium) // Sodium in milligrams
     return vals
   }, [nutritionalInfo])
 
   const units = useMemo(() => {
-    const unitsList: string[] = ['г', 'г', 'г']
-    if (nutritionalInfo.fiber !== undefined) unitsList.push('г')
-    if (nutritionalInfo.sugar !== undefined) unitsList.push('г')
-    if (nutritionalInfo.sodium !== undefined) unitsList.push('мг')
+    const unitsList: string[] = ['g', 'g', 'g']
+    if (nutritionalInfo.fiber !== undefined) unitsList.push('g')
+    if (nutritionalInfo.sugar !== undefined) unitsList.push('g')
+    if (nutritionalInfo.sodium !== undefined) unitsList.push('mg')
     return unitsList
   }, [nutritionalInfo])
 
@@ -97,7 +97,7 @@ export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionCha
   const chartSeries = useMemo(
     () => [
       {
-        name: 'Значение',
+        name: 'Value',
         data: values,
       },
     ],
@@ -106,7 +106,7 @@ export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionCha
 
   return (
     <div>
-      <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Детальная информация</h3>
+      <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Detailed Information</h3>
       <Chart options={chartOptions} series={chartSeries} type="bar" height={Math.max(300, categories.length * 60)} />
     </div>
   )

@@ -116,7 +116,7 @@ function DefaultNodeComponent({ data, selected, id }: NodeProps) {
                 strong 
                 className={styles.label}
                 onDoubleClick={handleLabelDoubleClick}
-                title="Двойной клик для редактирования"
+                title="Double click to edit"
               >
                 {label}
               </Text>
@@ -131,14 +131,14 @@ function DefaultNodeComponent({ data, selected, id }: NodeProps) {
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 className={styles.editTextarea}
                 size="small"
-                placeholder="Описание (двойной клик для редактирования)"
+                placeholder="Description (double click to edit)"
               />
             ) : (
               <Text 
                 type="secondary" 
                 className={styles.description}
                 onDoubleClick={handleDescriptionDoubleClick}
-                title="Двойной клик для редактирования"
+                title="Double click to edit"
                 style={{ 
                   minHeight: description ? 'auto' : '20px',
                   cursor: 'text',
@@ -146,7 +146,7 @@ function DefaultNodeComponent({ data, selected, id }: NodeProps) {
                   opacity: description ? 1 : 0.5
                 }}
               >
-                {description || 'Двойной клик, чтобы добавить описание'}
+                {description || 'Double click to add description'}
               </Text>
             )}
           </div>

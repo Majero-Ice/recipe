@@ -10,8 +10,8 @@ export function StatsPage() {
   if (!nutritionalInfo) {
     return (
       <div className={styles.emptyState}>
-        <p>Нет данных о пищевой ценности</p>
-        <p className={styles.emptyStateSubtext}>Сгенерируйте рецепт, чтобы увидеть графики</p>
+        <p>No nutritional data available</p>
+        <p className={styles.emptyStateSubtext}>Generate a recipe to see charts</p>
       </div>
     )
   }
@@ -19,7 +19,7 @@ export function StatsPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Пищевая ценность</h2>
+        <h2 className={styles.title}>Nutritional Information</h2>
       </div>
       <div className={styles.chartsGrid}>
         <div className={styles.chartCard}>
@@ -35,5 +35,6 @@ export function StatsPage() {
     </div>
   )
 }
+
 
 
