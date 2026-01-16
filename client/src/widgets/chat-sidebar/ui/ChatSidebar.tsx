@@ -35,9 +35,9 @@ interface ChatSidebarProps {
   onMessagesChange?: (messages: Message[]) => void
 }
 
-const MIN_WIDTH = 280
+const MIN_WIDTH = 520
 const MAX_WIDTH = 800
-const DEFAULT_WIDTH = 320
+const DEFAULT_WIDTH = 600
 
 export function ChatSidebar({ onGenerateFlow, onGenerateDiagram, initialMessages, onMessagesChange }: ChatSidebarProps) {
   const [isOpen, setIsOpen] = useState(true)
