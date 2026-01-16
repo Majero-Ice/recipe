@@ -62,13 +62,17 @@
   font-size: 14px;
   line-height: 1.5;
   color: #262626;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .description {
   font-size: 12px;
   line-height: 1.4;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .handle {

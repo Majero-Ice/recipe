@@ -25,16 +25,21 @@
 
 .streamingIndicator {
   position: absolute;
-  transform: translate(50%, 50%);
-  background: rgba(24, 144, 255, 0.9);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 4px;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1890ff;
+  padding: 12px 24px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  animation: pulse 2s ease-in-out infinite;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(24, 144, 255, 0.2);
 }
 
 @keyframes pulse {
@@ -48,12 +53,13 @@
 
 .streamingText {
   margin: 0;
+  white-space: nowrap;
 }
 
 .saveButton {
-  position: absolute;
+  position: fixed;
   top: 1rem;
-  right: 1rem;
+  right: 4.5rem; // Отступ от правого края, чтобы не наслаиваться на кнопку чата (которая на right: 1rem и имеет ширину ~40px)
   z-index: 100;
 }
 
@@ -66,5 +72,39 @@
   font-weight: 500;
   border: 1px solid rgba(24, 144, 255, 0.3);
   white-space: nowrap;
+}
+
+// MiniMap styles for better interactivity
+.minimap {
+  :global {
+    .react-flow__minimap {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+
+      &:hover {
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+      }
+
+      .react-flow__minimap-mask {
+        fill: rgba(24, 144, 255, 0.15);
+        stroke: #1890ff;
+        stroke-width: 2;
+        cursor: move;
+      }
+
+      .react-flow__minimap-node {
+        cursor: pointer;
+        transition: opacity 0.2s;
+
+        &:hover {
+          opacity: 0.8;
+        }
+      }
+    }
+  }
 }
 

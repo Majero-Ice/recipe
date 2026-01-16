@@ -8,19 +8,12 @@ import {
 	StructuredRecipeDto,
 } from './dto/recipe-block.dto';
 
-/**
- * Сервис для анализа и структурирования рецептов из ответов ИИ
- * Использует ИИ для определения рецепта и разбиения на блоки
- */
 @Injectable()
 export class RecipeAnalyzerService {
 	constructor(
 		@Inject(AI_PROVIDER) private readonly aiProvider: ChatProvider,
 	) {}
 
-	/**
-	 * Анализирует сообщение с помощью ИИ и возвращает структурированный рецепт
-	 */
 	async analyzeMessage(message: string): Promise<StructuredRecipeDto> {
 		if (!message || message.trim().length === 0) {
 			return {
@@ -80,7 +73,6 @@ ${message}`;
 				'gpt-5.2-2025-12-11',
 			);
 
-			// Парсим JSON ответ
 			let analysisResult: {
 				isRecipe: boolean;
 				blocks: Array<{
@@ -91,7 +83,6 @@ ${message}`;
 			};
 
 			try {
-				// Пытаемся найти JSON в ответе (на случай, если ИИ добавил дополнительный текст)
 				const jsonMatch = analysisResponse.match(/\{[\s\S]*\}/);
 				if (jsonMatch) {
 					analysisResult = JSON.parse(jsonMatch[0]);
@@ -101,7 +92,6 @@ ${message}`;
 			} catch (parseError) {
 				console.error('Failed to parse AI analysis response:', parseError);
 				console.error('Response was:', analysisResponse);
-				// В случае ошибки парсинга возвращаем как не-рецепт
 				return {
 					isRecipe: false,
 					originalMessage: message,
@@ -109,12 +99,10 @@ ${message}`;
 				};
 			}
 
-			// Валидация и преобразование результата
 			const blocks: RecipeBlockDto[] = [];
 
 			if (analysisResult.blocks && Array.isArray(analysisResult.blocks)) {
 				for (const block of analysisResult.blocks) {
-					// Валидируем тип блока
 					let blockType: RecipeBlockType;
 					switch (block.type?.toLowerCase()) {
 						case 'ingredients':
@@ -148,7 +136,6 @@ ${message}`;
 			};
 		} catch (error) {
 			console.error('Error analyzing recipe with AI:', error);
-			// В случае ошибки возвращаем как не-рецепт
 			return {
 				isRecipe: false,
 				originalMessage: message,

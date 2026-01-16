@@ -1,6 +1,7 @@
 export interface RecipeFlowRequest {
   recipe?: string
   message?: string
+  structuredRecipe?: import('../chat/types').StructuredRecipe
 }
 
 export interface FlowNode {
@@ -38,6 +39,7 @@ export interface NutritionalInfo {
 }
 
 export interface RecipeFlowResponse {
+  title?: string
   nodes: FlowNode[]
   edges: FlowEdge[]
   nutritionalInfo?: NutritionalInfo

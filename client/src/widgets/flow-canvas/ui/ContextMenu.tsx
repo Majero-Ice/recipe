@@ -2,11 +2,11 @@ import { memo } from 'react'
 import { Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import { 
-  AppstoreOutlined, 
   ShoppingOutlined, 
   ExperimentOutlined, 
   FireOutlined, 
-  CheckCircleOutlined 
+  CheckCircleOutlined, 
+  ApartmentOutlined
 } from '@ant-design/icons'
 import styles from './context-menu.module.scss'
 
@@ -19,9 +19,9 @@ interface ContextMenuProps {
 
 const menuItems: MenuProps['items'] = [
   {
-    key: 'defaultNode',
-    icon: <AppstoreOutlined />,
-    label: 'Default Node',
+    key: 'blockNode',
+    icon: <ApartmentOutlined />,
+    label: 'Block',
   },
   {
     key: 'ingredientNode',

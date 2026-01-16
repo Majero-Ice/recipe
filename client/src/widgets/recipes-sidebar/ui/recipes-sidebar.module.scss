@@ -88,7 +88,15 @@
   font-weight: 500;
   color: #1f2937;
   margin-bottom: 0.25rem;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editInput {
+  margin-bottom: 0.25rem;
 }
 
 .recipeMeta {

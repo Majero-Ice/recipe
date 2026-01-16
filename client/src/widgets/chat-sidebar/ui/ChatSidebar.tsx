@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Layout, Typography, Empty, Space, Spin, message as antMessage } from 'antd'
+import { NodeIndexOutlined } from '@ant-design/icons'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { ToggleChatButton } from '@/features/toggle-chat/ui/ToggleChatButton'
 import { Input } from '@/shared/ui/input/Input'
 import { Button } from '@/shared/ui/button/Button'
@@ -20,7 +23,8 @@ interface Message {
 }
 
 interface ChatSidebarProps {
-  onGenerateFlow?: (recipe?: string, message?: string) => void
+  onGenerateFlow?: (recipe?: StructuredRecipe) => void
+  onGenerateDiagram?: (recipe?: string, message?: string) => void
   initialMessages?: Array<{
     id: number
     text: string
@@ -35,7 +39,7 @@ const MIN_WIDTH = 280
 const MAX_WIDTH = 800
 const DEFAULT_WIDTH = 320
 
-export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange }: ChatSidebarProps) {
+export function ChatSidebar({ onGenerateFlow, onGenerateDiagram, initialMessages, onMessagesChange }: ChatSidebarProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [messages, setMessages] = useState<Message[]>(() => {
     if (initialMessages) {
@@ -228,13 +232,6 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
             ),
           )
           
-          // Trigger flow generation immediately when first block arrives (parallel generation)
-          if (onGenerateFlow && accumulatedBlocks.length === 1) {
-            // Start flow generation with the accumulated text or use the message text
-            const flowText = accumulatedText || userMessage.text
-            onGenerateFlow(flowText)
-          }
-          
           // Scroll to bottom as new blocks arrive
           setTimeout(() => scrollToBottom(), 0)
         },
@@ -247,7 +244,10 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
                 : msg,
             ),
           )
-          // Flow generation already triggered when first block arrived
+          // Trigger flow generation only when recipe is completely received
+          if (onGenerateFlow && recipe.isRecipe && recipe.blocks && recipe.blocks.length > 0) {
+            onGenerateFlow(recipe)
+          }
         },
         (error: Error) => {
           antMessage.error(error.message || 'Failed to stream message')
@@ -266,6 +266,27 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
       handleSend()
     }
   }
+
+  // Handle generate diagram button click for specific recipe message
+  const handleGenerateDiagram = useCallback((recipeMessage: Message) => {
+    if (!recipeMessage.recipe) {
+      antMessage.warning('No recipe found')
+      return
+    }
+
+    // Extract recipe text from originalMessage or build from blocks
+    const recipeText = recipeMessage.recipe.originalMessage || recipeMessage.text || ''
+    
+    if (!recipeText.trim()) {
+      antMessage.warning('Recipe text is empty')
+      return
+    }
+
+    // Call onGenerateDiagram if provided
+    if (onGenerateDiagram) {
+      onGenerateDiagram(recipeText, undefined)
+    }
+  }, [onGenerateDiagram])
 
   return (
     <>
@@ -312,21 +333,28 @@ export function ChatSidebar({ onGenerateFlow, initialMessages, onMessagesChange 
                     >
                       <div className={`${styles.messageBubble} ${shouldShowBlocks ? styles.recipeBubble : ''}`}>
                         {shouldShowBlocks && msg.recipe && msg.recipe.blocks ? (
+                          <>
                           <RecipeMessage blocks={msg.recipe.blocks} />
+                            <div className={styles.messageActions}>
+                              <Button
+                                type="primary"
+                                icon={<NodeIndexOutlined />}
+                                onClick={() => handleGenerateDiagram(msg)}
+                                size="small"
+                                title="Generate diagram from this recipe"
+                              >
+                                Generate Diagram
+                              </Button>
+                            </div>
+                          </>
                         ) : (
-                          msg.text && <div className={styles.messageText}>{msg.text}</div>
-                        )}
-                        {!msg.isUser && onGenerateFlow && isRecipe && (
-                          <div className={styles.messageActions}>
-                            <Button
-                              size="small"
-                              type="link"
-                              onClick={() => onGenerateFlow(msg.text)}
-                              style={{ padding: '4px 0', height: 'auto', fontSize: '12px' }}
-                            >
-                              Generate Flow
-                            </Button>
-                          </div>
+                          msg.text && (
+                            <div className={styles.messageText}>
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {msg.text}
+                              </ReactMarkdown>
+                            </div>
+                          )
                         )}
                       </div>
                     </div>

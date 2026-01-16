@@ -9,6 +9,8 @@
   font-size: 0.875rem;
   line-height: 1.5;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 

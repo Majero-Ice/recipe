@@ -1,7 +1,7 @@
 import { memo, useState, useCallback } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Card, Typography, Input } from 'antd'
-import { FolderOutlined } from '@ant-design/icons'
+import { ApartmentOutlined } from '@ant-design/icons'
 import styles from './blockNode.module.scss'
 
 const { Text } = Typography
@@ -18,7 +18,7 @@ interface BlockNodeData extends Record<string, unknown> {
 function BlockNodeComponent({ data, selected, id }: NodeProps) {
   const nodeData = data as BlockNodeData
   const { label = 'Block', description, icon, onLabelChange, onDescriptionChange } = nodeData
-  const displayIcon = icon || <FolderOutlined />
+  const displayIcon = icon || <ApartmentOutlined />
   const [isEditingLabel, setIsEditingLabel] = useState(false)
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [editedLabel, setEditedLabel] = useState(label)

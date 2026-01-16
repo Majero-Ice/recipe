@@ -11,6 +11,7 @@ import type { PageType } from '@/entities/recipe/model/recipe.slice'
 import { recipeStorage, type SavedRecipe } from '@/shared/lib/localStorage/recipeStorage'
 import type { Node, Edge } from '@xyflow/react'
 import { message as antMessage } from 'antd'
+import type { StructuredRecipe } from '@/shared/api/chat/types'
 import styles from './main-page.module.scss'
 
 const { Content } = Layout
@@ -18,6 +19,7 @@ const { Content } = Layout
 export function MainPage() {
   const [flowRecipe, setFlowRecipe] = useState<string | undefined>()
   const [flowMessage, setFlowMessage] = useState<string | undefined>()
+  const [flowStructuredRecipe, setFlowStructuredRecipe] = useState<StructuredRecipe | undefined>()
   const [savedNodes, setSavedNodes] = useState<Node[] | undefined>()
   const [savedEdges, setSavedEdges] = useState<Edge[] | undefined>()
   const [currentRecipeId, setCurrentRecipeId] = useState<string | undefined>()
@@ -37,13 +39,11 @@ export function MainPage() {
   const dispatch = useAppDispatch()
   const previousRecipeIdRef = useRef<string | undefined>(undefined)
 
-  // Auto-save current recipe
   const autoSaveCurrentRecipe = useCallback((recipeId: string, nodes: Node[], edges: Edge[]) => {
     try {
       const savedRecipe = recipeStorage.getById(recipeId)
       if (!savedRecipe) return
 
-      // Convert Date to timestamp for saving
       const chatMessagesToSave = chatMessages?.map((msg) => ({
         ...msg,
         timestamp: (msg.timestamp as any) instanceof Date ? (msg.timestamp as Date).getTime() : (typeof msg.timestamp === 'number' ? msg.timestamp : Date.now()),
@@ -56,65 +56,80 @@ export function MainPage() {
         chatMessages: chatMessagesToSave || undefined,
       })
 
-      // Update trigger to refresh list
       setRefreshRecipesTrigger((prev) => prev + 1)
     } catch (error) {
       console.error('Error auto-saving recipe:', error)
     }
   }, [chatMessages, nutritionalInfo])
 
-  const handleGenerateFlow = (recipe?: string, message?: string) => {
-    // Auto-save previous recipe before generating new one
-    if (previousRecipeIdRef.current && (currentNodes.length > 0 || currentEdges.length > 0)) {
+  const handleGenerateFlow = (structuredRecipe?: StructuredRecipe) => {
+    if (currentRecipeId && (currentNodes.length > 0 || currentEdges.length > 0 || chatMessages)) {
+      autoSaveCurrentRecipe(currentRecipeId, currentNodes, currentEdges)
+    } else if (previousRecipeIdRef.current && (currentNodes.length > 0 || currentEdges.length > 0)) {
       autoSaveCurrentRecipe(previousRecipeIdRef.current, currentNodes, currentEdges)
+    }
+    
+    if (structuredRecipe && structuredRecipe.blocks && structuredRecipe.blocks.length > 0) {
+      setFlowStructuredRecipe(structuredRecipe)
+      const recipeText = structuredRecipe.blocks
+        .map((block) => `## ${block.title}\n${block.content}`)
+        .join('\n\n')
+      setFlowRecipe(recipeText)
+    } else {
+      setFlowRecipe(undefined)
+      setFlowStructuredRecipe(undefined)
+    }
+    setFlowMessage(undefined)
+    setSavedNodes(undefined)
+    setSavedEdges(undefined)
+    if (!currentRecipeId) {
+      setCurrentRecipeId(undefined)
+      setChatMessages(undefined)
+      previousRecipeIdRef.current = undefined
+    }
+  }
+
+  const handleGenerateDiagram = useCallback((recipe?: string, message?: string) => {
+    if (currentRecipeId && (currentNodes.length > 0 || currentEdges.length > 0 || chatMessages)) {
+      autoSaveCurrentRecipe(currentRecipeId, currentNodes, currentEdges)
     }
     
     setFlowRecipe(recipe)
     setFlowMessage(message)
-    // Clear saved data when generating new recipe
     setSavedNodes(undefined)
     setSavedEdges(undefined)
-    setCurrentRecipeId(undefined)
-    setChatMessages(undefined)
-    previousRecipeIdRef.current = undefined
-  }
+  }, [currentRecipeId, currentNodes, currentEdges, chatMessages, autoSaveCurrentRecipe])
 
   const handleNewRecipe = useCallback(() => {
-    // Auto-save current recipe before creating new one
     if (previousRecipeIdRef.current && (currentNodes.length > 0 || currentEdges.length > 0)) {
       autoSaveCurrentRecipe(previousRecipeIdRef.current, currentNodes, currentEdges)
     }
     
-    // Clear all data for new recipe
     setFlowRecipe(undefined)
     setFlowMessage(undefined)
-    setSavedNodes([]) // Set empty array to clear diagram
-    setSavedEdges([]) // Set empty array to clear diagram
-    setCurrentNodes([]) // Clear diagram (nodes)
-    setCurrentEdges([]) // Clear diagram (edges)
+    setSavedNodes([])
+    setSavedEdges([])
+    setCurrentNodes([])
+    setCurrentEdges([])
     setCurrentRecipeId(undefined)
-    setChatMessages(undefined) // Clear chat
+    setChatMessages(undefined)
     dispatch(setNutritionalInfo(null))
     previousRecipeIdRef.current = undefined
     
-    // Close recipes sidebar
     setIsRecipesSidebarOpen(false)
     
     antMessage.success('New recipe created')
   }, [currentNodes, currentEdges, autoSaveCurrentRecipe, dispatch])
 
-  const handleSaveRecipe = (nodes: Node[], edges: Edge[], recipe?: string, message?: string) => {
-    // Prevent saving if this is already a loaded recipe
+  const handleSaveRecipe = (nodes: Node[], edges: Edge[], recipe?: string, message?: string, title?: string) => {
     if (currentRecipeId) {
       antMessage.warning('This recipe is already saved. Changes are saved automatically.')
       return
     }
 
     try {
-      const input = document.getElementById('recipe-name-input') as HTMLInputElement
-      const name = input?.value.trim() || `Recipe ${new Date().toLocaleDateString('en-US')}`
+      const name = title || `Recipe ${new Date().toLocaleDateString('en-US')}`
       
-      // Convert Date to timestamp for saving
       const chatMessagesToSave = chatMessages?.map((msg) => ({
         ...msg,
         timestamp: (msg.timestamp as any) instanceof Date ? (msg.timestamp as Date).getTime() : (typeof msg.timestamp === 'number' ? msg.timestamp : Date.now()),
@@ -130,11 +145,9 @@ export function MainPage() {
         chatMessages: chatMessagesToSave || undefined,
       })
 
-      // Set current recipe ID
       setCurrentRecipeId(savedRecipe.id)
       previousRecipeIdRef.current = savedRecipe.id
       
-      antMessage.success('Recipe saved')
       setIsRecipesSidebarOpen(true)
       setRefreshRecipesTrigger((prev) => prev + 1)
     } catch (error) {
@@ -143,17 +156,37 @@ export function MainPage() {
     }
   }
 
+  const handleDeleteRecipe = useCallback(() => {
+    if (!currentRecipeId) return
+
+    try {
+      recipeStorage.delete(currentRecipeId)
+      
+      setCurrentRecipeId(undefined)
+      previousRecipeIdRef.current = undefined
+      setSavedNodes([])
+      setSavedEdges([])
+      setCurrentNodes([])
+      setCurrentEdges([])
+      setFlowRecipe(undefined)
+      setFlowMessage(undefined)
+      setChatMessages(undefined)
+      dispatch(setNutritionalInfo(null))
+      
+      setRefreshRecipesTrigger((prev) => prev + 1)
+    } catch (error) {
+      antMessage.error('Failed to delete recipe')
+      console.error('Error deleting recipe:', error)
+    }
+  }, [currentRecipeId, dispatch])
+
   const handleLoadRecipe = useCallback((savedRecipe: SavedRecipe) => {
-    // Auto-save previous recipe before loading new one
     if (previousRecipeIdRef.current && previousRecipeIdRef.current !== savedRecipe.id && (currentNodes.length > 0 || currentEdges.length > 0)) {
       autoSaveCurrentRecipe(previousRecipeIdRef.current, currentNodes, currentEdges)
     }
 
-    // Mark as initial load to prevent immediate save
     isInitialLoadRef.current = true
 
-    // Optimize loading: perform all updates synchronously, but use React batching
-    // Load diagram directly
     setSavedNodes(savedRecipe.nodes)
     setSavedEdges(savedRecipe.edges)
     setCurrentNodes(savedRecipe.nodes)
@@ -161,13 +194,9 @@ export function MainPage() {
     setCurrentRecipeId(savedRecipe.id)
     previousRecipeIdRef.current = savedRecipe.id
     
-    // Load charts (nutritional info)
     dispatch(setNutritionalInfo(savedRecipe.nutritionalInfo || null))
     
-    // Load chat (convert timestamp back to Date if needed)
-    // Use memoization for optimization
     if (savedRecipe.chatMessages && savedRecipe.chatMessages.length > 0) {
-      // Convert only if timestamp is a number, otherwise use as is
       const messagesWithDates = savedRecipe.chatMessages.map((msg) => ({
         ...msg,
         timestamp: typeof msg.timestamp === 'number' ? new Date(msg.timestamp) : (msg.timestamp as Date),
@@ -177,7 +206,6 @@ export function MainPage() {
       setChatMessages(undefined)
     }
     
-    // Clear current recipe and message to avoid reloading flow
     setFlowRecipe(undefined)
     setFlowMessage(undefined)
   }, [dispatch, autoSaveCurrentRecipe, currentNodes, currentEdges])
@@ -186,12 +214,10 @@ export function MainPage() {
     dispatch(setCurrentPage(page))
   }
 
-  // Use useRef to track previous messages
   const previousChatMessagesRef = useRef<string>('')
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const isInitialLoadRef = useRef<boolean>(false)
   
-  // Memoize callback for onMessagesChange to avoid infinite loops
   const handleMessagesChange = useCallback((msgs: Array<{
     id: number
     text: string
@@ -199,15 +225,13 @@ export function MainPage() {
     isUser: boolean
     recipe?: any
   }>) => {
-    // Check if messages actually changed
     const newMessagesString = JSON.stringify(msgs)
     if (newMessagesString !== previousChatMessagesRef.current) {
       previousChatMessagesRef.current = newMessagesString
       setChatMessages(msgs)
     }
   }, [])
-  
-  // Update ref when chatMessages changes externally (e.g., when loading recipe)
+
   useEffect(() => {
     if (chatMessages) {
       previousChatMessagesRef.current = JSON.stringify(chatMessages)
@@ -216,24 +240,64 @@ export function MainPage() {
     }
   }, [chatMessages])
 
-  // Auto-save when nodes/edges change for current recipe
   useEffect(() => {
-    // Don't save on initial load
+    const savedCurrentRecipeId = localStorage.getItem('currentRecipeId')
+    if (savedCurrentRecipeId) {
+      const savedRecipe = recipeStorage.getById(savedCurrentRecipeId)
+      if (savedRecipe) {
+        isInitialLoadRef.current = true
+        
+        setSavedNodes(savedRecipe.nodes)
+        setSavedEdges(savedRecipe.edges)
+        setCurrentNodes(savedRecipe.nodes)
+        setCurrentEdges(savedRecipe.edges)
+        setCurrentRecipeId(savedRecipe.id)
+        previousRecipeIdRef.current = savedRecipe.id
+        
+        dispatch(setNutritionalInfo(savedRecipe.nutritionalInfo || null))
+        
+        if (savedRecipe.chatMessages && savedRecipe.chatMessages.length > 0) {
+          const messagesWithDates = savedRecipe.chatMessages.map((msg) => ({
+            ...msg,
+            timestamp: typeof msg.timestamp === 'number' ? new Date(msg.timestamp) : (msg.timestamp as Date),
+          }))
+          setChatMessages(messagesWithDates)
+        }
+      } else {
+        localStorage.removeItem('currentRecipeId')
+      }
+    }
+  }, [dispatch])
+
+  useEffect(() => {
+    if (currentRecipeId) {
+      localStorage.setItem('currentRecipeId', currentRecipeId)
+    } else {
+      localStorage.removeItem('currentRecipeId')
+    }
+  }, [currentRecipeId])
+
+  useEffect(() => {
+    if (currentRecipeId && currentNodes.length > 0 && currentEdges.length > 0) {
+      setSavedNodes(currentNodes)
+      setSavedEdges(currentEdges)
+    }
+  }, [currentNodes, currentEdges, currentRecipeId])
+
+  useEffect(() => {
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false
       return
     }
 
-    // Save only if there's a current recipe and there are changes
-    if (currentRecipeId && (currentNodes.length > 0 || currentEdges.length > 0)) {
-      // Use debounce to avoid frequent saves
+    if (currentRecipeId && ((currentNodes.length > 0 || currentEdges.length > 0) || (chatMessages && chatMessages.length > 0))) {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current)
       }
 
       autoSaveTimeoutRef.current = setTimeout(() => {
         autoSaveCurrentRecipe(currentRecipeId, currentNodes, currentEdges)
-      }, 2000) // Save 2 seconds after last change
+      }, 2000)
 
       return () => {
         if (autoSaveTimeoutRef.current) {
@@ -241,7 +305,7 @@ export function MainPage() {
         }
       }
     }
-  }, [currentNodes, currentEdges, currentRecipeId, autoSaveCurrentRecipe])
+  }, [currentNodes, currentEdges, chatMessages, currentRecipeId, autoSaveCurrentRecipe])
 
   return (
     <Layout className={styles.container}>
@@ -260,7 +324,9 @@ export function MainPage() {
             <FlowCanvas
               recipe={flowRecipe}
               message={flowMessage}
+              structuredRecipe={flowStructuredRecipe}
               onSave={handleSaveRecipe}
+              onDelete={handleDeleteRecipe}
               initialNodes={savedNodes}
               initialEdges={savedEdges}
               onNodesChange={setCurrentNodes}
@@ -278,6 +344,7 @@ export function MainPage() {
       </Content>
       <ChatSidebar
         onGenerateFlow={handleGenerateFlow}
+        onGenerateDiagram={handleGenerateDiagram}
         initialMessages={chatMessages}
         onMessagesChange={handleMessagesChange}
       />

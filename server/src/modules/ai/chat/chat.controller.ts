@@ -28,9 +28,6 @@ export class ChatController {
 		return this.chatService.chat(request);
 	}
 
-	/**
-	 * Streaming endpoint for chat messages using Server-Sent Events (SSE)
-	 */
 	@Post('message/stream')
 	async streamMessage(
 		@Body() request: ChatRequestDto,
@@ -40,24 +37,20 @@ export class ChatController {
 			throw new BadRequestException('Message is required and cannot be empty');
 		}
 
-		// Set headers for SSE
 		res.setHeader('Content-Type', 'text/event-stream');
 		res.setHeader('Cache-Control', 'no-cache');
 		res.setHeader('Connection', 'keep-alive');
-		res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx
+		res.setHeader('X-Accel-Buffering', 'no');
 		res.setHeader('Access-Control-Allow-Origin', '*');
 		res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
 		try {
 			for await (const item of this.chatService.chatStream(request)) {
 				if (item.type === 'chunk') {
-					// Stream message chunks
 					res.write(`data: ${JSON.stringify({ chunk: item.data })}\n\n`);
 				} else if (item.type === 'block') {
-					// Send recipe block in real-time
 					res.write(`data: ${JSON.stringify({ block: item.data })}\n\n`);
 				} else if (item.type === 'recipe') {
-					// Send complete recipe structure
 					res.write(`data: ${JSON.stringify({ recipe: item.data })}\n\n`);
 				}
 			}

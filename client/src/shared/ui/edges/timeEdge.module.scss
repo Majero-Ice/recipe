@@ -33,3 +33,20 @@
   line-height: 1;
 }
 
+.timeInput {
+  :global(.ant-input) {
+    text-align: center;
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 12px;
+    border: 1px solid #40a9ff;
+  }
+}
+
+.timePlaceholder {
+  font-size: 10px;
+  color: #8c8c8c;
+  font-style: italic;
+  opacity: 0.7;
+}
+

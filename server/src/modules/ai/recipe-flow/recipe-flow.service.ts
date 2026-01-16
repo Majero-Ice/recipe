@@ -5,9 +5,6 @@ import { ChatService } from '../chat/chat.service';
 import { RecipeFlowRequestDto } from './dto/recipe-flow-request.dto';
 import { RecipeFlowResponseDto, FlowNode, FlowEdge } from './dto/recipe-flow-response.dto';
 
-/**
- * Сервис для генерации flow-диаграммы из кухонного рецепта
- */
 @Injectable()
 export class RecipeFlowService {
 	constructor(
@@ -15,41 +12,39 @@ export class RecipeFlowService {
 		private readonly chatService: ChatService,
 	) {}
 
-	/**
-	 * Генерирует flow-диаграмму из рецепта
-	 * @param request Запрос с рецептом или сообщением для получения рецепта
-	 * @returns Flow-диаграмма с узлами и связями
-	 */
 	async generateFlow(request: RecipeFlowRequestDto): Promise<RecipeFlowResponseDto> {
 		let recipeText: string;
 
-		// Если передан рецепт напрямую, используем его
-		if (request.recipe) {
+		if (request.structuredRecipe && request.structuredRecipe.blocks && request.structuredRecipe.blocks.length > 0) {
+			recipeText = this.buildRecipeTextFromBlocks(request.structuredRecipe.blocks);
+		}
+		else if (request.recipe) {
 			recipeText = request.recipe;
 		}
-		// Если передано сообщение, получаем рецепт напрямую через AI без анализа
 		else if (request.message) {
-			// Оптимизация: получаем рецепт напрямую через AI, минуя chat service
-			// чтобы избежать двойного анализа (chat + recipe analyzer)
 			recipeText = await this.getRecipeFromMessage(request.message);
 		} else {
-			throw new BadRequestException('Either recipe or message must be provided');
+			throw new BadRequestException('Either structuredRecipe, recipe or message must be provided');
 		}
 
 		if (!recipeText || recipeText.trim().length === 0) {
 			throw new BadRequestException('Recipe text cannot be empty');
 		}
 
-		// Генерируем flow-диаграмму через AI
+		const recipeTitle = await this.generateRecipeTitle(recipeText);
+		
 		const flowData = await this.generateFlowFromRecipe(recipeText);
+		flowData.title = recipeTitle;
 
 		return flowData;
 	}
 
-	/**
-	 * Получает рецепт из сообщения напрямую через AI, минуя chat service
-	 * Это позволяет избежать двойного анализа и ускорить процесс
-	 */
+	private buildRecipeTextFromBlocks(blocks: Array<{ type: string; title: string; content: string }>): string {
+		return blocks
+			.map((block) => `## ${block.title}\n${block.content}`)
+			.join('\n\n');
+	}
+
 	async getRecipeFromMessage(message: string): Promise<string> {
 		const systemPrompt = `You are a helpful cooking assistant. 
 
@@ -94,145 +89,84 @@ Always include clear section headers (Ingredients, Preparation, Cooking, Serving
 		return await this.aiProvider.chat(messages, 'gpt-5.2-2025-12-11');
 	}
 
-	/**
-	 * Streams flow diagram generation, yielding nodes and edges as they're parsed
-	 */
+	private async generateRecipeTitle(recipeText: string): Promise<string> {
+		const firstLine = recipeText.split('\n')[0].trim();
+		const words = recipeText.split(/\s+/);
+		
+		const titlePatterns = [
+			/^(?:Recipe for |How to (?:make|prepare|cook) |How do you (?:make|prepare|cook) )(.+?)(?:\.|:|$)/i,
+			/^(.+?)(?:\s+Recipe|:)/i,
+		];
+
+		for (const pattern of titlePatterns) {
+			const match = firstLine.match(pattern);
+			if (match && match[1]) {
+				const extracted = match[1].trim();
+				if (extracted.length > 0 && extracted.length < 50) {
+					return extracted;
+				}
+			}
+		}
+
+		const titlePrompt = `Generate a short recipe title (2-4 words) for: ${firstLine.substring(0, 200)}. Title only, same language.`;
+
+		try {
+			const title = await this.aiProvider.chat(
+				[
+					{ role: 'system', content: 'Generate concise recipe titles (2-4 words), title only.' },
+					{ role: 'user', content: titlePrompt },
+				],
+				'gpt-5.2-2025-12-11',
+			);
+			const cleaned = title.trim().replace(/^["']|["']$/g, '').split('\n')[0].trim();
+			return cleaned.length > 50 ? cleaned.substring(0, 47) + '...' : cleaned || words.slice(0, 3).join(' ');
+		} catch (error) {
+			console.error('Failed to generate recipe title:', error);
+			const meaningfulWords = words.slice(0, 5).filter(w => w.length > 2 && !['the', 'and', 'for', 'with'].includes(w.toLowerCase()));
+			return meaningfulWords.slice(0, 3).join(' ') || 'Recipe';
+		}
+	}
+
 	async *generateFlowStream(
 		recipeText: string,
 	): AsyncGenerator<
+		| { type: 'title'; data: string }
 		| { type: 'node'; data: FlowNode }
 		| { type: 'edge'; data: FlowEdge }
 		| { type: 'complete'; data: RecipeFlowResponseDto },
 		void,
 		unknown
 	> {
-		const systemPrompt = `You are a helpful assistant that converts cooking recipes into flow diagrams.
+		const recipeTitle = await this.generateRecipeTitle(recipeText);
+		yield { type: 'title', data: recipeTitle };
+		const systemPrompt = `Convert cooking recipes into flow diagrams. Respond in the SAME language as the recipe.
 
-CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the user's message and the recipe text. If the user writes in Russian, respond in Russian. If the user writes in English, respond in English. If the user writes in Spanish, respond in Spanish. Always match the user's language exactly - this includes all node labels, descriptions, ingredient names, and time values in the JSON response.
-
-Your task is to analyze a cooking recipe and create a structured flow diagram representing the cooking process.
-
-The flow diagram should represent:
-1. Ingredients (list of ingredients needed)
-2. Preparation steps (cutting, chopping, mixing, etc.)
-3. Cooking steps (boiling, frying, baking, etc.)
-4. Serving/finishing steps
-
-IMPORTANT: You MUST return a complete, valid JSON object. Do not truncate the response. Make sure all strings are properly escaped and the JSON is complete.
-
-Return ONLY a valid JSON object with this exact structure:
+JSON STRUCTURE:
 {
-  "nodes": [
-    {
-      "id": "string (unique identifier)",
-      "type": "ingredientNode | preparationNode | cookingNode | servingNode | blockNode",
-      "position": { "x": number, "y": number },
-      "data": {
-        "label": "string (step name)",
-        "description": "string (optional step description)",
-        "ingredients": [
-          {
-            "name": "string (ingredient name)",
-            "quantity": "string (amount and unit, e.g., '2 cups', '500g', '3 pieces')"
-          }
-        ]
-      }
-    }
-  ],
-  "edges": [
-    {
-      "id": "string (unique identifier)",
-      "source": "string (node id)",
-      "target": "string (node id)",
-      "time": "string (time required before proceeding to next step, e.g., '30 minutes', '1 hour', '15 minutes', '2 hours')"
-    }
-  ],
-  "nutritionalInfo": {
-    "calories": number (total calories per serving),
-    "protein": number (grams of protein per serving),
-    "fat": number (grams of fat per serving),
-    "carbohydrates": number (grams of carbohydrates per serving),
-    "fiber": number (grams of fiber per serving, optional),
-    "sugar": number (grams of sugar per serving, optional),
-    "sodium": number (milligrams of sodium per serving, optional)
-  }
+  "nodes": [{"id": "string", "type": "ingredientNode|preparationNode|cookingNode|servingNode|blockNode", "position": {"x": 0, "y": 0}, "data": {"label": "string", "description": "string (optional)", "ingredients": [{"name": "string", "quantity": "string"}]}}],
+  "edges": [{"id": "string", "source": "nodeId", "target": "nodeId", "time": "string (e.g., '30 minutes' or '')"}],
+  "nutritionalInfo": {"calories": number, "protein": number, "fat": number, "carbohydrates": number, "fiber": number (optional), "sugar": number (optional), "sodium": number (optional)}
 }
 
-Node Types:
-- "ingredientNode": Create EXACTLY ONE node of this type. It should contain ALL ingredients from the recipe in the "ingredients" array. Each ingredient should have "name" and "quantity" fields. The label should be "Ingredients". Example data structure:
-  {
-    "label": "Ingredients",
-    "ingredients": [
-      { "name": "Carrots", "quantity": "2 pieces" },
-      { "name": "Onions", "quantity": "1 large" },
-      { "name": "Beef", "quantity": "500g" },
-      { "name": "Salt", "quantity": "1 tsp" }
-    ]
-  }
-- "blockNode": Use EXCLUSIVELY as the FIRST node of each parallel block. This node identifies and represents the entire block (e.g., "Sauté", "Broth", "Sauce", "Garnish"). It should have a descriptive name that summarizes what the block does. Do NOT use blockNode for regular steps - only as block headers.
-- "preparationNode": Use for preparation steps (e.g., "Chop vegetables", "Marinate meat", "Mix ingredients")
-- "cookingNode": Use for actual cooking steps (e.g., "Boil water", "Fry onions", "Simmer for 30 minutes", "Bake in oven")
-- "servingNode": Use for final steps (e.g., "Serve hot", "Garnish", "Ready to serve")
+NODE TYPES:
+- ingredientNode: EXACTLY ONE, contains ALL ingredients, label="Ingredients"
+- blockNode: FIRST node of each parallel block (e.g., "Sauté", "Broth")
+- preparationNode: prep steps (chop, mix, marinate)
+- cookingNode: cooking steps (boil, fry, bake, simmer)
+- servingNode: final steps (serve, garnish)
 
-DIAGRAM STRUCTURE - BLOCK-BASED APPROACH (CRITICAL):
-For complex dishes, organize the recipe into separate, independent BLOCKS/PIPELINES. Each block represents a complete workflow for one component (e.g., "Sauté", "Broth", "Vegetables").
+BLOCK STRUCTURE:
+1. ingredientNode → edges to FIRST node of EACH parallel block
+2. Each block: blockNode → sequential nodes (A→B→C)
+3. Blocks merge at single node, then continue sequentially
+4. NO connections between different blocks (only at merge)
 
-STRUCTURE RULES:
-1. START: Create EXACTLY ONE "ingredientNode" with ALL ingredients. This is the root node.
-2. BLOCK CREATION: From the ingredientNode, create separate edges DIRECTLY to the FIRST node of EACH parallel block. Each block should have a descriptive name as its first node (e.g., "Sauté", "Broth").
-3. WITHIN BLOCKS: Each block is a self-contained sequential pipeline:
-   - Nodes within a block connect sequentially: A → B → C → D
-   - NO connections between nodes from different blocks
-   - Each block flows independently from start to finish
-4. BLOCK MERGING: All parallel blocks converge at a single MERGE node where they combine (e.g., "Add sauté to broth").
-5. AFTER MERGE: After the merge point, continue with a normal sequential flow (one node after another).
-6. NESTED BLOCKS: If needed after merging, you can create new parallel blocks again, following the same pattern.
-
-EXAMPLE STRUCTURE (Borscht):
-- ingredientNode (Ingredients) → branches directly to:
-  * Block 1: blockNode "Sauté" → preparationNode "Prepare onions" → preparationNode "Prepare beets" → cookingNode "Sauté in pan"
-  * Block 2: blockNode "Broth" → preparationNode "Prepare meat" → cookingNode "Cook meat in water" → preparationNode "Prepare potatoes" → cookingNode "Cook potatoes in broth"
-- Both blocks merge at: cookingNode "Add sauté to broth"
-- After merge: cookingNode "Further processes" → servingNode "Ready"
-
-IMPORTANT: The first node of each parallel block MUST be a "blockNode" type. This visually identifies the block. Subsequent nodes within the block can be preparationNode, cookingNode, or other appropriate types.
-
-KEY PRINCIPLES:
-- ingredientNode connects DIRECTLY to the first node of each block (NO intermediate nodes like "Prepare products")
-- Each block is completely independent - NO edges between different blocks
-- Blocks only connect at merge points
-- After merging, use normal sequential flow
-- This creates clear visual separation: each block is a separate pipeline that can be followed independently
-
-Rules:
-- Create EXACTLY ONE "ingredientNode" with ALL ingredients from the recipe in the "ingredients" array
-- From ingredientNode, create edges DIRECTLY to the FIRST node of EACH parallel block
-- Each block's first node MUST be of type "blockNode" with a descriptive name representing the block (e.g., "Sauté", "Broth", "Sauce", "Garnish")
-- After the blockNode, use appropriate node types (preparationNode, cookingNode, etc.) for subsequent steps within the block
-- Within each block, connect nodes sequentially in a linear chain (A → B → C)
-- Between parallel blocks, create ABSOLUTELY NO connections - they are completely independent pipelines
-- All blocks converge at a merge node where they combine
-- After the merge node, continue with sequential flow (or create new blocks if needed)
-- Position nodes will be automatically calculated by the client, so you can use placeholder positions like { "x": 0, "y": 0 } for all nodes
-- The client will arrange nodes in a hierarchical layout based on the edges, so focus on creating correct node connections rather than precise positioning
-- Identify opportunities for parallelization: if one step takes a long time (like boiling, simmering, marinating) and another step can be done during that time, they should be separate parallel blocks
-- Common parallel block scenarios:
-  * Block 1: Main component cooking (broth, meat, etc.) - long process
-  * Block 2: Side component preparation (sauté, vegetables, etc.) - can be done during Block 1
-  * Block 3: Additional preparations (garnishes, sides, etc.)
-- The time on edges leading to parallel blocks should reflect the actual time needed for each parallel task
-- After parallel blocks, they converge into a single merge node that combines the results
-- For each edge, include the "time" field indicating how long to wait before proceeding to the next step
-- Time examples: "5 minutes", "10 minutes", "30 minutes", "1 hour", "2 hours", "overnight"
-- If a step requires waiting (e.g., "bake for 1 hour", "marinate for 30 minutes", "let rest for 15 minutes"), include that time in the edge connecting to the next step
-- If no waiting time is needed between steps, use empty string "" or omit the time field
-- Make sure all node IDs in edges exist in nodes array
-- Escape special characters in strings (quotes, newlines, etc.)
-- Calculate and include nutritional information (nutritionalInfo) based on the ingredients and their quantities in the recipe
-- Nutritional information should be calculated for the entire recipe (total servings). Include calories, protein, fat, carbohydrates as required fields. Optionally include fiber, sugar, and sodium if available
-- Use reasonable estimates based on standard nutritional values for common ingredients
-- Ensure the JSON is complete and valid - do not truncate it
-- Return ONLY the JSON object, no additional text, no markdown formatting, no code blocks`;
+RULES:
+- Use placeholder positions {x:0, y:0} for all nodes
+- Parallelize long tasks (broth/meat cooking) with prep tasks (sauté/vegetables)
+- Edge "time" field: waiting duration or "" if none
+- Calculate nutritionalInfo from ingredients (required: calories, protein, fat, carbs)
+- Return ONLY valid JSON, no markdown, no code blocks`;
 
 		const userPrompt = `Convert this recipe into a flow diagram:\n\n${recipeText}`;
 
@@ -246,7 +180,6 @@ Rules:
 		const sentEdgeIds = new Set<string>();
 
 		try {
-			// Используем прямой доступ к OpenAI клиенту для использования JSON mode и streaming
 			const openaiClient = (this.aiProvider as any).getClient?.();
 			if (openaiClient) {
 				const stream = await openaiClient.chat.completions.create({
@@ -255,8 +188,8 @@ Rules:
 						role: msg.role as 'system' | 'user' | 'assistant',
 						content: msg.content,
 					})),
-					temperature: 0.3,
-					max_completion_tokens: 4000,
+					temperature: 0.2,
+					max_completion_tokens: 8000,
 					response_format: { type: 'json_object' },
 					stream: true,
 				});
@@ -266,10 +199,8 @@ Rules:
 					if (content) {
 						jsonBuffer += content;
 
-						// Пытаемся парсить JSON инкрементально и отправлять узлы и связи по мере их обнаружения
 						const parsed = this.tryParseFlowJson(jsonBuffer);
 						if (parsed) {
-							// Отправляем новые узлы
 							if (parsed.nodes) {
 								for (const node of parsed.nodes) {
 									if (node.id && !sentNodeIds.has(node.id)) {
@@ -279,7 +210,6 @@ Rules:
 								}
 							}
 
-							// Отправляем новые связи
 							if (parsed.edges) {
 								for (const edge of parsed.edges) {
 									if (edge.id && !sentEdgeIds.has(edge.id)) {
@@ -292,12 +222,11 @@ Rules:
 					}
 				}
 
-				// После завершения стриминга пытаемся распарсить полный JSON
 				try {
 					const flowData = JSON.parse(jsonBuffer.trim());
 					if (flowData.nodes && Array.isArray(flowData.nodes) && flowData.edges && Array.isArray(flowData.edges)) {
-						// Валидируем и отправляем финальный результат
 						const validated = this.validateFlowData(flowData);
+						validated.title = recipeTitle;
 						yield { type: 'complete', data: validated };
 					}
 				} catch (parseError) {
@@ -314,14 +243,9 @@ Rules:
 		}
 	}
 
-	/**
-	 * Пытается распарсить JSON flow данных инкрементально
-	 * Извлекает отдельные объекты узлов и связей из неполного JSON
-	 */
 	private tryParseFlowJson(jsonBuffer: string): { nodes?: FlowNode[]; edges?: FlowEdge[] } | null {
 		const result: { nodes?: FlowNode[]; edges?: FlowEdge[] } = {};
 		
-		// Сначала пытаемся распарсить полный JSON
 		try {
 			const parsed = JSON.parse(jsonBuffer.trim());
 			if (parsed.nodes && Array.isArray(parsed.nodes)) {
@@ -334,10 +258,8 @@ Rules:
 				return result;
 			}
 		} catch {
-			// JSON еще не полный, пытаемся извлечь объекты инкрементально
 		}
 
-		// Извлекаем узлы из массива nodes
 		const nodesMatch = jsonBuffer.match(/"nodes"\s*:\s*\[([\s\S]*)/);
 		if (nodesMatch) {
 			const nodesContent = nodesMatch[1];
@@ -351,7 +273,6 @@ Rules:
 								return node as FlowNode;
 							}
 						} catch {
-							// Пропускаем некорректные узлы
 						}
 						return null;
 					})
@@ -359,7 +280,6 @@ Rules:
 			}
 		}
 
-		// Извлекаем связи из массива edges
 		const edgesMatch = jsonBuffer.match(/"edges"\s*:\s*\[([\s\S]*)/);
 		if (edgesMatch) {
 			const edgesContent = edgesMatch[1];
@@ -373,7 +293,6 @@ Rules:
 								return edge as FlowEdge;
 							}
 						} catch {
-							// Пропускаем некорректные связи
 						}
 						return null;
 					})
@@ -384,9 +303,6 @@ Rules:
 		return Object.keys(result).length > 0 ? result : null;
 	}
 
-	/**
-	 * Извлекает отдельные JSON объекты из строки (для инкрементального парсинга)
-	 */
 	private extractJsonObjects(content: string): string[] {
 		const objects: string[] = [];
 		let depth = 0;
@@ -432,9 +348,6 @@ Rules:
 		return objects;
 	}
 
-	/**
-	 * Валидирует flow данные
-	 */
 	private validateFlowData(flowData: any): RecipeFlowResponseDto {
 		if (!flowData.nodes || !Array.isArray(flowData.nodes)) {
 			throw new Error('Invalid response: nodes array is missing or invalid');
@@ -443,7 +356,6 @@ Rules:
 			throw new Error('Invalid response: edges array is missing or invalid');
 		}
 
-		// Валидация узлов
 		for (const node of flowData.nodes) {
 			if (!node.id || !node.type || !node.position || !node.data) {
 				throw new Error(`Invalid node structure: ${JSON.stringify(node)}`);
@@ -453,7 +365,6 @@ Rules:
 			}
 		}
 
-		// Валидация связей
 		const nodeIds = new Set(flowData.nodes.map((n: FlowNode) => n.id));
 		for (const edge of flowData.edges) {
 			if (!edge.id || !edge.source || !edge.target) {
@@ -470,137 +381,35 @@ Rules:
 		return flowData as RecipeFlowResponseDto;
 	}
 
-	/**
-	 * Генерирует flow-диаграмму из текста рецепта используя AI
-	 */
 	private async generateFlowFromRecipe(recipeText: string): Promise<RecipeFlowResponseDto> {
-		const systemPrompt = `You are a helpful assistant that converts cooking recipes into flow diagrams.
+		const systemPrompt = `Convert cooking recipes into flow diagrams. Respond in the SAME language as the recipe.
 
-CRITICAL LANGUAGE REQUIREMENT: You MUST respond in the EXACT same language as the recipe text. If the recipe is in Russian, respond in Russian. If the recipe is in English, respond in English. If the recipe is in Spanish, respond in Spanish. Always match the recipe's language exactly - this includes all node labels, descriptions, ingredient names, and time values in the JSON response.
-
-Your task is to analyze a cooking recipe and create a structured flow diagram representing the cooking process.
-
-The flow diagram should represent:
-1. Ingredients (list of ingredients needed)
-2. Preparation steps (cutting, chopping, mixing, etc.)
-3. Cooking steps (boiling, frying, baking, etc.)
-4. Serving/finishing steps
-
-IMPORTANT: You MUST return a complete, valid JSON object. Do not truncate the response. Make sure all strings are properly escaped and the JSON is complete.
-
-Return ONLY a valid JSON object with this exact structure:
+JSON STRUCTURE:
 {
-  "nodes": [
-    {
-      "id": "string (unique identifier)",
-      "type": "ingredientNode | preparationNode | cookingNode | servingNode | blockNode",
-      "position": { "x": number, "y": number },
-      "data": {
-        "label": "string (step name)",
-        "description": "string (optional step description)",
-        "ingredients": [
-          {
-            "name": "string (ingredient name)",
-            "quantity": "string (amount and unit, e.g., '2 cups', '500g', '3 pieces')"
-          }
-        ]
-      }
-    }
-  ],
-  "edges": [
-    {
-      "id": "string (unique identifier)",
-      "source": "string (node id)",
-      "target": "string (node id)",
-      "time": "string (time required before proceeding to next step, e.g., '30 minutes', '1 hour', '15 minutes', '2 hours')"
-    }
-  ],
-  "nutritionalInfo": {
-    "calories": number (total calories per serving),
-    "protein": number (grams of protein per serving),
-    "fat": number (grams of fat per serving),
-    "carbohydrates": number (grams of carbohydrates per serving),
-    "fiber": number (grams of fiber per serving, optional),
-    "sugar": number (grams of sugar per serving, optional),
-    "sodium": number (milligrams of sodium per serving, optional)
-  }
+  "nodes": [{"id": "string", "type": "ingredientNode|preparationNode|cookingNode|servingNode|blockNode", "position": {"x": 0, "y": 0}, "data": {"label": "string", "description": "string (optional)", "ingredients": [{"name": "string", "quantity": "string"}]}}],
+  "edges": [{"id": "string", "source": "nodeId", "target": "nodeId", "time": "string (e.g., '30 minutes' or '')"}],
+  "nutritionalInfo": {"calories": number, "protein": number, "fat": number, "carbohydrates": number, "fiber": number (optional), "sugar": number (optional), "sodium": number (optional)}
 }
 
-Node Types:
-- "ingredientNode": Create EXACTLY ONE node of this type. It should contain ALL ingredients from the recipe in the "ingredients" array. Each ingredient should have "name" and "quantity" fields. The label should be "Ingredients". Example data structure:
-  {
-    "label": "Ingredients",
-    "ingredients": [
-      { "name": "Carrots", "quantity": "2 pieces" },
-      { "name": "Onions", "quantity": "1 large" },
-      { "name": "Beef", "quantity": "500g" },
-      { "name": "Salt", "quantity": "1 tsp" }
-    ]
-  }
-- "blockNode": Use EXCLUSIVELY as the FIRST node of each parallel block. This node identifies and represents the entire block (e.g., "Sauté", "Broth", "Sauce", "Garnish"). It should have a descriptive name that summarizes what the block does. Do NOT use blockNode for regular steps - only as block headers.
-- "preparationNode": Use for preparation steps (e.g., "Chop vegetables", "Marinate meat", "Mix ingredients")
-- "cookingNode": Use for actual cooking steps (e.g., "Boil water", "Fry onions", "Simmer for 30 minutes", "Bake in oven")
-- "servingNode": Use for final steps (e.g., "Serve hot", "Garnish", "Ready to serve")
+NODE TYPES:
+- ingredientNode: EXACTLY ONE, contains ALL ingredients, label="Ingredients"
+- blockNode: FIRST node of each parallel block (e.g., "Sauté", "Broth")
+- preparationNode: prep steps (chop, mix, marinate)
+- cookingNode: cooking steps (boil, fry, bake, simmer)
+- servingNode: final steps (serve, garnish)
 
-DIAGRAM STRUCTURE - BLOCK-BASED APPROACH (CRITICAL):
-For complex dishes, organize the recipe into separate, independent BLOCKS/PIPELINES. Each block represents a complete workflow for one component (e.g., "Sauté", "Broth", "Vegetables").
+BLOCK STRUCTURE:
+1. ingredientNode → edges to FIRST node of EACH parallel block
+2. Each block: blockNode → sequential nodes (A→B→C)
+3. Blocks merge at single node, then continue sequentially
+4. NO connections between different blocks (only at merge)
 
-STRUCTURE RULES:
-1. START: Create EXACTLY ONE "ingredientNode" with ALL ingredients. This is the root node.
-2. BLOCK CREATION: From the ingredientNode, create separate edges DIRECTLY to the FIRST node of EACH parallel block. Each block should have a descriptive name as its first node (e.g., "Sauté", "Broth").
-3. WITHIN BLOCKS: Each block is a self-contained sequential pipeline:
-   - Nodes within a block connect sequentially: A → B → C → D
-   - NO connections between nodes from different blocks
-   - Each block flows independently from start to finish
-4. BLOCK MERGING: All parallel blocks converge at a single MERGE node where they combine (e.g., "Add sauté to broth").
-5. AFTER MERGE: After the merge point, continue with a normal sequential flow (one node after another).
-6. NESTED BLOCKS: If needed after merging, you can create new parallel blocks again, following the same pattern.
-
-EXAMPLE STRUCTURE (Borscht):
-- ingredientNode (Ingredients) → branches directly to:
-  * Block 1: blockNode "Sauté" → preparationNode "Prepare onions" → preparationNode "Prepare beets" → cookingNode "Sauté in pan"
-  * Block 2: blockNode "Broth" → preparationNode "Prepare meat" → cookingNode "Cook meat in water" → preparationNode "Prepare potatoes" → cookingNode "Cook potatoes in broth"
-- Both blocks merge at: cookingNode "Add sauté to broth"
-- After merge: cookingNode "Further processes" → servingNode "Ready"
-
-IMPORTANT: The first node of each parallel block MUST be a "blockNode" type. This visually identifies the block. Subsequent nodes within the block can be preparationNode, cookingNode, or other appropriate types.
-
-KEY PRINCIPLES:
-- ingredientNode connects DIRECTLY to the first node of each block (NO intermediate nodes like "Prepare products")
-- Each block is completely independent - NO edges between different blocks
-- Blocks only connect at merge points
-- After merging, use normal sequential flow
-- This creates clear visual separation: each block is a separate pipeline that can be followed independently
-
-Rules:
-- Create EXACTLY ONE "ingredientNode" with ALL ingredients from the recipe in the "ingredients" array
-- From ingredientNode, create edges DIRECTLY to the FIRST node of EACH parallel block
-- Each block's first node MUST be of type "blockNode" with a descriptive name representing the block (e.g., "Sauté", "Broth", "Sauce", "Garnish")
-- After the blockNode, use appropriate node types (preparationNode, cookingNode, etc.) for subsequent steps within the block
-- Within each block, connect nodes sequentially in a linear chain (A → B → C)
-- Between parallel blocks, create ABSOLUTELY NO connections - they are completely independent pipelines
-- All blocks converge at a merge node where they combine
-- After the merge node, continue with sequential flow (or create new blocks if needed)
-- Position nodes will be automatically calculated by the client, so you can use placeholder positions like { "x": 0, "y": 0 } for all nodes
-- The client will arrange nodes in a hierarchical layout based on the edges, so focus on creating correct node connections rather than precise positioning
-- Identify opportunities for parallelization: if one step takes a long time (like boiling, simmering, marinating) and another step can be done during that time, they should be separate parallel blocks
-- Common parallel block scenarios:
-  * Block 1: Main component cooking (broth, meat, etc.) - long process
-  * Block 2: Side component preparation (sauté, vegetables, etc.) - can be done during Block 1
-  * Block 3: Additional preparations (garnishes, sides, etc.)
-- The time on edges leading to parallel blocks should reflect the actual time needed for each parallel task
-- After parallel blocks, they converge into a single merge node that combines the results
-- For each edge, include the "time" field indicating how long to wait before proceeding to the next step
-- Time examples: "5 minutes", "10 minutes", "30 minutes", "1 hour", "2 hours", "overnight"
-- If a step requires waiting (e.g., "bake for 1 hour", "marinate for 30 minutes", "let rest for 15 minutes"), include that time in the edge connecting to the next step
-- If no waiting time is needed between steps, use empty string "" or omit the time field
-- Make sure all node IDs in edges exist in nodes array
-- Escape special characters in strings (quotes, newlines, etc.)
-- Calculate and include nutritional information (nutritionalInfo) based on the ingredients and their quantities in the recipe
-- Nutritional information should be calculated for the entire recipe (total servings). Include calories, protein, fat, carbohydrates as required fields. Optionally include fiber, sugar, and sodium if available
-- Use reasonable estimates based on standard nutritional values for common ingredients
-- Ensure the JSON is complete and valid - do not truncate it
-- Return ONLY the JSON object, no additional text, no markdown formatting, no code blocks`;
+RULES:
+- Use placeholder positions {x:0, y:0} for all nodes
+- Parallelize long tasks (broth/meat cooking) with prep tasks (sauté/vegetables)
+- Edge "time" field: waiting duration or "" if none
+- Calculate nutritionalInfo from ingredients (required: calories, protein, fat, carbs)
+- Return ONLY valid JSON, no markdown, no code blocks`;
 
 		const userPrompt = `Convert this recipe into a flow diagram:\n\n${recipeText}`;
 
@@ -611,7 +420,6 @@ Rules:
 
 		let response: string | undefined;
 		try {
-			// Используем прямой доступ к OpenAI клиенту для увеличения max_completion_tokens и использования JSON mode
 			const openaiClient = (this.aiProvider as any).getClient?.();
 			if (openaiClient) {
 				const completion = await openaiClient.chat.completions.create({
@@ -620,13 +428,12 @@ Rules:
 						role: msg.role as 'system' | 'user' | 'assistant',
 						content: msg.content,
 					})),
-					temperature: 0.3,
-					max_completion_tokens: 4000,
+					temperature: 0.2,
+					max_completion_tokens: 8000,
 					response_format: { type: 'json_object' },
 				});
 				response = completion.choices[0]?.message?.content;
 			} else {
-				// Fallback на стандартный метод
 				response = await this.aiProvider.chat(messages, 'gpt-5.2-2025-12-11');
 			}
 			
@@ -634,22 +441,18 @@ Rules:
 				throw new Error('Empty response from AI');
 			}
 			
-			// Парсим JSON из ответа (может быть обернут в markdown код)
 			let jsonString = response.trim();
 			
-			// Убираем markdown код блоки если есть
 			if (jsonString.startsWith('```json')) {
 				jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
 			} else if (jsonString.startsWith('```')) {
 				jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
 			}
 
-			// Пытаемся найти JSON объект в ответе, даже если он обрезан
 			let flowData: RecipeFlowResponseDto;
 			try {
 				flowData = JSON.parse(jsonString);
 			} catch (parseError) {
-				// Если парсинг не удался, пытаемся найти JSON объект в тексте
 				const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
 				if (jsonMatch) {
 					try {
@@ -662,7 +465,6 @@ Rules:
 				}
 			}
 
-			// Валидация структуры
 			if (!flowData.nodes || !Array.isArray(flowData.nodes)) {
 				throw new Error('Invalid response: nodes array is missing or invalid');
 			}
@@ -670,7 +472,6 @@ Rules:
 				throw new Error('Invalid response: edges array is missing or invalid');
 			}
 
-			// Валидация узлов
 			for (const node of flowData.nodes) {
 				if (!node.id || !node.type || !node.position || !node.data) {
 					throw new Error(`Invalid node structure: ${JSON.stringify(node)}`);
@@ -680,7 +481,6 @@ Rules:
 				}
 			}
 
-			// Валидация связей
 			const nodeIds = new Set(flowData.nodes.map((n) => n.id));
 			for (const edge of flowData.edges) {
 				if (!edge.id || !edge.source || !edge.target) {

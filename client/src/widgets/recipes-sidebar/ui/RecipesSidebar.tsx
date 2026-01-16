@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Layout, Typography, Empty, List, Button, Popconfirm, message as antMessage } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Layout, Typography, Empty, List, Button, Popconfirm, Input, message as antMessage } from 'antd'
+import { DeleteOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons'
 import { ToggleChatButton } from '@/features/toggle-chat/ui/ToggleChatButton'
 import { recipeStorage, type SavedRecipe } from '@/shared/lib/localStorage/recipeStorage'
 import styles from './recipes-sidebar.module.scss'
@@ -21,6 +21,9 @@ const DEFAULT_WIDTH = 300
 export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, refreshTrigger }: RecipesSidebarProps) {
   const [recipes, setRecipes] = useState<SavedRecipe[]>([])
   const [sidebarWidth] = useState(DEFAULT_WIDTH)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState<string>('')
+  const inputRef = useRef<any>(null)
 
   useEffect(() => {
     loadRecipes()
@@ -47,6 +50,48 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
     onLoadRecipe(recipe)
     antMessage.success('Recipe loaded')
   }, [onLoadRecipe])
+
+  const handleStartEdit = (recipe: SavedRecipe, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setEditingId(recipe.id)
+    setEditingName(recipe.name || 'Untitled')
+    setTimeout(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }, 0)
+  }
+
+  const handleSaveEdit = (id: string) => {
+    const trimmedName = editingName.trim()
+    if (!trimmedName) {
+      antMessage.warning('Recipe name cannot be empty')
+      setEditingId(null)
+      return
+    }
+
+    try {
+      recipeStorage.update(id, { name: trimmedName })
+      loadRecipes()
+      setEditingId(null)
+      antMessage.success('Recipe renamed')
+    } catch (error) {
+      antMessage.error('Failed to rename recipe')
+      console.error('Error renaming recipe:', error)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditingName('')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit(id)
+    } else if (e.key === 'Escape') {
+      handleCancelEdit()
+    }
+  }
 
   return (
     <>
@@ -86,6 +131,14 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
                   <List.Item
                     className={styles.recipeItem}
                     actions={[
+                      <Button
+                        type="text"
+                        icon={<EditOutlined />}
+                        size="small"
+                        onClick={(e) => handleStartEdit(recipe, e)}
+                        key="edit"
+                        title="Rename recipe"
+                      />,
                       <Popconfirm
                         title="Delete recipe?"
                         description="This action cannot be undone"
@@ -105,12 +158,26 @@ export function RecipesSidebar({ isOpen, onToggle, onLoadRecipe, onNewRecipe, re
                   >
                     <List.Item.Meta
                       title={
-                        <div
-                          className={styles.recipeTitle}
-                          onClick={() => handleLoadRecipe(recipe)}
-                        >
-                          {recipe.name || 'Untitled'}
-                        </div>
+                        editingId === recipe.id ? (
+                          <Input
+                            ref={inputRef}
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={() => handleSaveEdit(recipe.id)}
+                            onKeyDown={(e) => handleKeyDown(e, recipe.id)}
+                            className={styles.editInput}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <div
+                            className={styles.recipeTitle}
+                            onClick={() => handleLoadRecipe(recipe)}
+                            onDoubleClick={(e) => handleStartEdit(recipe, e)}
+                            title="Double-click to rename"
+                          >
+                            {recipe.name || 'Untitled'}
+                          </div>
+                        )
                       }
                     />
                   </List.Item>

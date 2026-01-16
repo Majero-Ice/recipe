@@ -1,16 +1,11 @@
-/**
- * DTO для запроса генерации flow-диаграммы из рецепта
- */
-export class RecipeFlowRequestDto {
-	/**
-	 * Текстовый вариант кухонного рецепта
-	 */
-	recipe: string;
+import { StructuredRecipeDto } from '../../recipe-analyzer/dto/recipe-block.dto';
 
-	/**
-	 * Опционально: можно запросить рецепт через chat, передав сообщение
-	 */
+export class RecipeFlowRequestDto {
+	recipe?: string;
+
 	message?: string;
+
+	structuredRecipe?: StructuredRecipeDto;
 }
 
 

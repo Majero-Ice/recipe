@@ -1,7 +1,7 @@
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Card, Typography, List, Input, Button, Space } from 'antd'
+import { Card, Typography, Input, Button, Space } from 'antd'
 import { ShoppingOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import styles from './ingredientNode.module.scss'
 
@@ -103,6 +103,11 @@ function IngredientNodeComponent({ data, selected }: NodeProps) {
   }, [isExpanded])
 
   const handleCardClick = (e: React.MouseEvent) => {
+    // If Ctrl or Meta key is pressed, don't open the list - allow edge creation
+    if (e.ctrlKey || e.metaKey) {
+      // Don't stop propagation - let ReactFlow handle the click for edge creation
+      return
+    }
     e.stopPropagation()
     setIsExpanded(!isExpanded)
   }
@@ -280,50 +285,9 @@ function IngredientNodeComponent({ data, selected }: NodeProps) {
               </div>
             }
           >
-            <List
-              size="small"
-              dataSource={ingredients}
-              renderItem={(item, index) => (
-                <List.Item 
-                  className={styles.listItem}
-                  actions={[
-                    editingIngredientIndex === index ? (
-                      <Space key="actions" size="small">
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={handleSaveEditIngredient}
-                          disabled={!editingIngredient?.name.trim()}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={handleCancelEditIngredient}
-                        >
-                          Cancel
-                        </Button>
-                      </Space>
-                    ) : (
-                      <Space key="actions" size="small">
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => handleStartEditIngredient(index)}
-                        />
-                        <Button
-                          type="link"
-                          size="small"
-                          danger
-                          icon={<DeleteOutlined />}
-                          onClick={() => handleDeleteIngredient(index)}
-                        />
-                      </Space>
-                    ),
-                  ]}
-                >
+            <div className={styles.ingredientsList}>
+              {ingredients.map((item, index) => (
+                <div key={index} className={styles.listItem}>
                   {editingIngredientIndex === index && editingIngredient ? (
                     <div className={styles.editIngredientForm}>
                       <Input
@@ -341,20 +305,54 @@ function IngredientNodeComponent({ data, selected }: NodeProps) {
                         size="small"
                         onPressEnter={handleSaveEditIngredient}
                       />
+                      <Space size="small" style={{ marginTop: 8 }}>
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={handleSaveEditIngredient}
+                          disabled={!editingIngredient?.name.trim()}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={handleCancelEditIngredient}
+                        >
+                          Cancel
+                        </Button>
+                      </Space>
                     </div>
                   ) : (
                     <>
-                      <Text strong className={styles.ingredientName}>
-                        {item.name}
-                      </Text>
-                      <Text className={styles.ingredientQuantity}>
-                        {item.quantity}
-                      </Text>
+                      <div className={styles.ingredientContent}>
+                        <div className={styles.ingredientName}>
+                          {item.name}
+                        </div>
+                        <span className={styles.ingredientQuantity}>
+                          {item.quantity}
+                        </span>
+                      </div>
+                      <Space size="small" className={styles.itemActions}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => handleStartEditIngredient(index)}
+                        />
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleDeleteIngredient(index)}
+                        />
+                      </Space>
                     </>
                   )}
-                </List.Item>
-              )}
-            />
+                </div>
+              ))}
+            </div>
             {isAddingIngredient && (
               <div className={styles.addIngredientForm}>
                 <Input

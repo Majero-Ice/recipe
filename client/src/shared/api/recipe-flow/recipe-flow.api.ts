@@ -23,6 +23,7 @@ export const recipeFlowApi = {
   /**
    * Streams flow diagram generation using Server-Sent Events (SSE)
    * @param request Flow request
+   * @param onTitle Callback when recipe title is received
    * @param onNode Callback when a node is received in real-time
    * @param onEdge Callback when an edge is received in real-time
    * @param onComplete Callback when complete flow data is received
@@ -35,6 +36,7 @@ export const recipeFlowApi = {
     onEdge?: (edge: FlowEdge) => void,
     onComplete?: (data: RecipeFlowResponse) => void,
     onError?: (error: Error) => void,
+    onTitle?: (title: string) => void,
   ): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/recipe-flow/generate/stream`, {
       method: 'POST',
@@ -73,6 +75,7 @@ export const recipeFlowApi = {
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6))
+                  if (data.title) onTitle?.(data.title)
                   if (data.node) onNode?.(data.node)
                   if (data.edge) onEdge?.(data.edge)
                   if (data.complete) onComplete?.(data.complete)
@@ -112,6 +115,10 @@ export const recipeFlowApi = {
 
               if (data.edge) {
                 onEdge?.(data.edge)
+              }
+
+              if (data.title) {
+                onTitle?.(data.title)
               }
 
               if (data.complete) {

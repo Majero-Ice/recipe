@@ -8,15 +8,16 @@ interface DetailedNutritionChartProps {
 }
 
 export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionChartProps) {
-  const categories = useMemo(() => {
-    const cats: string[] = ['Protein', 'Fat', 'Carbohydrates']
-    if (nutritionalInfo.fiber !== undefined) cats.push('Fiber')
-    if (nutritionalInfo.sugar !== undefined) cats.push('Sugar')
-    if (nutritionalInfo.sodium !== undefined) cats.push('Sodium')
-    return cats
+  const labels = useMemo(() => {
+    const labs: string[] = ['Protein', 'Fat', 'Carbohydrates']
+    if (nutritionalInfo.fiber !== undefined) labs.push('Fiber')
+    if (nutritionalInfo.sugar !== undefined) labs.push('Sugar')
+    if (nutritionalInfo.sodium !== undefined) labs.push('Sodium')
+    return labs
   }, [nutritionalInfo])
 
-  const values = useMemo(() => {
+  // Store original values with their units for display
+  const originalValues = useMemo(() => {
     const vals: number[] = [
       nutritionalInfo.protein,
       nutritionalInfo.fat,
@@ -36,6 +37,17 @@ export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionCha
     return unitsList
   }, [nutritionalInfo])
 
+  // Convert all values to grams for proper bar chart scale
+  // Sodium is in mg, so we convert it to g (divide by 1000)
+  const values = useMemo(() => {
+    return originalValues.map((val, index) => {
+      if (units[index] === 'mg') {
+        return val / 1000 // Convert mg to g
+      }
+      return val
+    })
+  }, [originalValues, units])
+
   const chartOptions: ApexOptions = useMemo(
     () => ({
       chart: {
@@ -47,8 +59,6 @@ export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionCha
       plotOptions: {
         bar: {
           horizontal: true,
-          barHeight: '60%',
-          borderRadius: 4,
           distributed: true,
         },
       },
@@ -56,58 +66,46 @@ export function DetailedNutritionChart({ nutritionalInfo }: DetailedNutritionCha
         enabled: true,
         formatter: (val: number, opts: any) => {
           const index = opts.dataPointIndex
-          const unit = units[index]
-          return `${val.toFixed(1)} ${unit}`
+          // Hide labels on small bars (less than 5% of max value)
+          const maxValue = Math.max(...values)
+          if (val < maxValue * 0.05) {
+            return ''
+          }
+          const unit = units[index] || 'g'
+          // Use original value for display (not converted to grams)
+          const originalValue = originalValues[index]
+          return `${originalValue.toFixed(1)} ${unit}`
         },
       },
       xaxis: {
-        categories: categories,
-        labels: {
-          style: {
-            fontSize: '14px',
-          },
-        },
+        categories: labels,
       },
       yaxis: {
-        labels: {
-          style: {
-            fontSize: '14px',
-          },
+        title: {
+          text: 'Amount',
         },
       },
       colors: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'],
       tooltip: {
         y: {
-          formatter: (val: number, opts: any) => {
+          formatter: (_val: number, opts: any) => {
             const index = opts.dataPointIndex
-            const unit = units[index]
-            return `${val.toFixed(1)} ${unit}`
+            const unit = units[index] || 'g'
+            // Use original value for display (not converted to grams)
+            const originalValue = originalValues[index]
+            return `${originalValue.toFixed(1)} ${unit}`
           },
         },
       },
-      grid: {
-        show: true,
-        borderColor: '#e5e7eb',
-        strokeDashArray: 4,
-      },
     }),
-    [categories, units],
+    [labels, units, originalValues, values],
   )
 
-  const chartSeries = useMemo(
-    () => [
-      {
-        name: 'Value',
-        data: values,
-      },
-    ],
-    [values],
-  )
 
   return (
     <div>
       <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Detailed Information</h3>
-      <Chart options={chartOptions} series={chartSeries} type="bar" height={Math.max(300, categories.length * 60)} />
+      <Chart options={chartOptions} series={[{ name: 'Amount', data: values }]} type="bar" height={350} />
     </div>
   )
 }

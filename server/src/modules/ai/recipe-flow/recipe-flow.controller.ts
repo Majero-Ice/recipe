@@ -28,9 +28,6 @@ export class RecipeFlowController {
 		return this.recipeFlowService.generateFlow(request);
 	}
 
-	/**
-	 * Streaming endpoint for flow diagram generation using Server-Sent Events (SSE)
-	 */
 	@Post('generate/stream')
 	async streamFlow(
 		@Body() request: RecipeFlowRequestDto,
@@ -40,7 +37,6 @@ export class RecipeFlowController {
 			throw new BadRequestException('Either recipe or message must be provided');
 		}
 
-		// Set headers for SSE
 		res.setHeader('Content-Type', 'text/event-stream');
 		res.setHeader('Cache-Control', 'no-cache');
 		res.setHeader('Connection', 'keep-alive');
@@ -49,23 +45,27 @@ export class RecipeFlowController {
 		res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
 		try {
-			// Get recipe text first
 			let recipeText: string;
-			if (request.recipe) {
+			if (request.structuredRecipe && request.structuredRecipe.blocks && request.structuredRecipe.blocks.length > 0) {
+				recipeText = request.structuredRecipe.blocks
+					.map((block) => `## ${block.title}\n${block.content}`)
+					.join('\n\n');
+			} else if (request.recipe) {
 				recipeText = request.recipe;
 			} else if (request.message) {
 				recipeText = await this.recipeFlowService.getRecipeFromMessage(request.message);
 			} else {
-				throw new BadRequestException('Either recipe or message must be provided');
+				throw new BadRequestException('Either structuredRecipe, recipe or message must be provided');
 			}
 
 			if (!recipeText || recipeText.trim().length === 0) {
 				throw new BadRequestException('Recipe text cannot be empty');
 			}
 
-			// Stream flow generation
 			for await (const item of this.recipeFlowService.generateFlowStream(recipeText)) {
-				if (item.type === 'node') {
+				if (item.type === 'title') {
+					res.write(`data: ${JSON.stringify({ title: item.data })}\n\n`);
+				} else if (item.type === 'node') {
 					res.write(`data: ${JSON.stringify({ node: item.data })}\n\n`);
 				} else if (item.type === 'edge') {
 					res.write(`data: ${JSON.stringify({ edge: item.data })}\n\n`);
